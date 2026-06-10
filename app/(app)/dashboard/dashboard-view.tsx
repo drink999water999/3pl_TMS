@@ -195,7 +195,7 @@ export function DashboardView({
             </div>
             <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-brand-blue"
+                className="h-full rounded-full bg-gradient-to-r from-brand-blue to-brand-sky transition-[width] duration-700"
                 style={{ width: `${kpis.utilization}%` }}
               />
             </div>
@@ -363,16 +363,29 @@ function Stat({
   tone: "navy" | "blue" | "green" | "red";
 }) {
   const tones: Record<string, string> = {
-    navy: "bg-brand-navy/10 text-brand-navy",
-    blue: "bg-brand-blue/10 text-brand-blue",
-    green: "bg-green-100 text-green-700",
-    red: "bg-red-100 text-red-700",
+    navy: "from-brand-navy to-brand-blue shadow-[0_4px_12px_rgba(19,56,107,0.35)]",
+    blue: "from-brand-blue to-brand-sky shadow-[0_4px_12px_rgba(43,143,214,0.35)]",
+    green: "from-emerald-500 to-green-600 shadow-[0_4px_12px_rgba(22,163,74,0.3)]",
+    red: "from-rose-500 to-red-600 shadow-[0_4px_12px_rgba(220,38,38,0.3)]",
+  };
+  const bars: Record<string, string> = {
+    navy: "from-brand-navy to-brand-blue",
+    blue: "from-brand-blue to-brand-sky",
+    green: "from-emerald-500 to-green-600",
+    red: "from-rose-500 to-red-600",
   };
   return (
-    <Card className="flex items-center gap-4 p-5">
-      <span className={`rounded-lg p-2.5 ${tones[tone]}`}>{icon}</span>
+    <Card className="relative flex items-center gap-4 overflow-hidden p-5 hover:shadow-card-hover">
+      <span
+        className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${bars[tone]}`}
+      />
+      <span
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br text-white ${tones[tone]}`}
+      >
+        {icon}
+      </span>
       <div>
-        <p className="text-3xl font-bold leading-none text-brand-navy">
+        <p className="text-3xl font-bold leading-none tracking-tight text-brand-navy">
           {value}
         </p>
         <p className="mt-1 text-sm font-medium">{label}</p>

@@ -14,9 +14,13 @@ const config: Config = {
       screens: { "2xl": "1400px" },
     },
     extend: {
+      fontFamily: {
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+      },
       colors: {
         // FastLane Logistics brand palette (from logo)
         brand: {
+          ink: "#0a1f3d",
           navy: "#13386b",
           blue: "#2b8fd6",
           sky: "#5bb6e6",
@@ -51,6 +55,12 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+      },
+      boxShadow: {
+        card: "0 1px 3px rgba(16, 24, 40, 0.07), 0 1px 2px rgba(16, 24, 40, 0.04)",
+        "card-hover":
+          "0 10px 24px -6px rgba(19, 56, 107, 0.16), 0 4px 8px -4px rgba(19, 56, 107, 0.1)",
+        glow: "0 0 0 1px rgba(91, 182, 230, 0.25), 0 4px 16px rgba(43, 143, 214, 0.45)",
       },
       borderRadius: {
         lg: "var(--radius)",

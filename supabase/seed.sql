@@ -1,23 +1,9 @@
 -- =============================================================================
--- FastLane TMS — local seed data (runs on `supabase db reset`)
--- Lookups + a small set of sample master data so the UI has something to show.
+-- FastLane TMS — local DEMO data (runs on `supabase db reset`, local only).
+-- Reference lookups (truck/shipment types) live in a migration so they also
+-- ship to production; this file is just sample master data for the local UI.
 -- Idempotent: safe to re-run.
 -- =============================================================================
-
--- --- Lookups ------------------------------------------------------------------
-insert into truck_types (name, code, description) values
-  ('Flatbed',      'FLAT', 'Open flatbed trailer'),
-  ('Curtain Side', 'CURT', 'Curtain-sided trailer'),
-  ('5 Ton',        '5T',   '5-tonne rigid truck'),
-  ('10 Ton',       '10T',  '10-tonne rigid truck'),
-  ('Van',          'VAN',  'Panel/box van')
-on conflict do nothing;
-
-insert into shipment_types (name, code, description) values
-  ('Dry',    'DRY', 'Ambient / dry goods'),
-  ('Cold',   'COLD', 'Chilled / refrigerated'),
-  ('Frozen', 'FRZ', 'Frozen goods')
-on conflict do nothing;
 
 -- --- Clients ------------------------------------------------------------------
 insert into clients (name, code, phone, email, billing_address) values

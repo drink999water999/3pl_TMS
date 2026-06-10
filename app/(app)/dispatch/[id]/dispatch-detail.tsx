@@ -617,7 +617,7 @@ function FlagDialog({
     <Dialog open onClose={onClose} title="Flag an issue">
       <div className="space-y-3">
         <div className="space-y-1.5">
-          <Label>What's wrong?</Label>
+          <Label>What went wrong?</Label>
           <Textarea
             value={note}
             onChange={(e) => setNote(e.target.value)}

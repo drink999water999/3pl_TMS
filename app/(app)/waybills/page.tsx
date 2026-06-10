@@ -87,7 +87,7 @@ export default async function WaybillsPage({
           {(waybills ?? []).length === 0 ? (
             <TR>
               <TD colSpan={5} className="text-center text-muted-foreground">
-                No waybills yet. They're created automatically when a dispatch is
+                No waybills yet. They appear automatically when a dispatch is
                 marked Dispatched.
               </TD>
             </TR>

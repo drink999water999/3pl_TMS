@@ -10,6 +10,7 @@ export function PageHeader({
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
+        <div className="mb-2 h-1 w-9 rounded-full bg-gradient-to-r from-brand-orange to-amber-400" />
         <h1 className="text-2xl font-bold tracking-tight text-brand-navy">
           {title}
         </h1>

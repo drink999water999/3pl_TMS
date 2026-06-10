@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 export function Table({ className, ...props }: React.ComponentProps<"table">) {
   return (
-    <div className="w-full overflow-x-auto rounded-lg border bg-card">
+    <div className="w-full overflow-x-auto rounded-xl border border-border/80 bg-card shadow-card">
       <table className={cn("w-full text-sm", className)} {...props} />
     </div>
   );
@@ -12,7 +12,10 @@ export function Table({ className, ...props }: React.ComponentProps<"table">) {
 export function THead({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
-      className={cn("border-b bg-muted/50 text-left", className)}
+      className={cn(
+        "border-b bg-gradient-to-b from-muted/80 to-muted/40 text-left",
+        className,
+      )}
       {...props}
     />
   );
@@ -24,7 +27,13 @@ export function TBody(props: React.ComponentProps<"tbody">) {
 
 export function TR({ className, ...props }: React.ComponentProps<"tr">) {
   return (
-    <tr className={cn("border-b last:border-0 hover:bg-muted/30", className)} {...props} />
+    <tr
+      className={cn(
+        "border-b transition-colors last:border-0 hover:bg-brand-blue/[0.045]",
+        className,
+      )}
+      {...props}
+    />
   );
 }
 
