@@ -28,7 +28,7 @@ export default async function RequestsPage({
 }: {
   searchParams: { q?: string; status?: string };
 }) {
-  await requireRole(["admin", "operations"]);
+  await requireRole(["admin", "operations", "client"]);
   const q = searchParams.q?.trim();
   const status = STATUSES.includes(searchParams.status as ReqStatus)
     ? (searchParams.status as ReqStatus)

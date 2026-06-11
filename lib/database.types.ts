@@ -56,6 +56,12 @@ export type Database = {
           email: string | null;
           billing_address: string | null;
           notes: string | null;
+          pricing_mode: string;
+          currency: string;
+          rate_per_km: number | null;
+          base_charge: number;
+          margin_type: string | null;
+          margin_value: number | null;
           is_active: boolean;
           deleted_at: string | null;
           created_at: string;
@@ -71,6 +77,12 @@ export type Database = {
           email?: string | null;
           billing_address?: string | null;
           notes?: string | null;
+          pricing_mode?: string;
+          currency?: string;
+          rate_per_km?: number | null;
+          base_charge?: number;
+          margin_type?: string | null;
+          margin_value?: number | null;
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
@@ -86,6 +98,12 @@ export type Database = {
           email?: string | null;
           billing_address?: string | null;
           notes?: string | null;
+          pricing_mode?: string;
+          currency?: string;
+          rate_per_km?: number | null;
+          base_charge?: number;
+          margin_type?: string | null;
+          margin_value?: number | null;
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
@@ -162,6 +180,7 @@ export type Database = {
           ready_for_billing: boolean;
           closed_at: string | null;
           notes: string | null;
+          carrier_cost: number | null;
           created_by: string | null;
           updated_by: string | null;
           created_at: string;
@@ -187,6 +206,7 @@ export type Database = {
           ready_for_billing?: boolean;
           closed_at?: string | null;
           notes?: string | null;
+          carrier_cost?: number | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;
@@ -212,6 +232,7 @@ export type Database = {
           ready_for_billing?: boolean;
           closed_at?: string | null;
           notes?: string | null;
+          carrier_cost?: number | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;
@@ -379,6 +400,8 @@ export type Database = {
           phone: string | null;
           role: Database["public"]["Enums"]["user_role"];
           driver_id: string | null;
+          client_id: string | null;
+          company_name: string | null;
           active: boolean;
           created_at: string;
           updated_at: string;
@@ -389,6 +412,8 @@ export type Database = {
           phone?: string | null;
           role?: Database["public"]["Enums"]["user_role"];
           driver_id?: string | null;
+          client_id?: string | null;
+          company_name?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -399,6 +424,8 @@ export type Database = {
           phone?: string | null;
           role?: Database["public"]["Enums"]["user_role"];
           driver_id?: string | null;
+          client_id?: string | null;
+          company_name?: string | null;
           active?: boolean;
           created_at?: string;
           updated_at?: string;
@@ -612,6 +639,7 @@ export type Database = {
           quantity: number | null;
           weight: number | null;
           pallets: number | null;
+          distance_km: number | null;
           required_pickup_at: string | null;
           delivery_date: string | null;
           special_instructions: string | null;
@@ -637,6 +665,7 @@ export type Database = {
           quantity?: number | null;
           weight?: number | null;
           pallets?: number | null;
+          distance_km?: number | null;
           required_pickup_at?: string | null;
           delivery_date?: string | null;
           special_instructions?: string | null;
@@ -662,6 +691,7 @@ export type Database = {
           quantity?: number | null;
           weight?: number | null;
           pallets?: number | null;
+          distance_km?: number | null;
           required_pickup_at?: string | null;
           delivery_date?: string | null;
           special_instructions?: string | null;
@@ -756,6 +786,48 @@ export type Database = {
         };
         Relationships: [];
       };
+      waybill_billing: {
+        Row: {
+          waybill_id: string;
+          freight_amount: number | null;
+          carrier_cost: number | null;
+          margin_amount: number | null;
+          currency: string | null;
+          pricing_mode: string | null;
+          basis: string | null;
+          payment_status: string;
+          invoice_no: string | null;
+          paid_at: string | null;
+          computed_at: string;
+        };
+        Insert: {
+          waybill_id: string;
+          freight_amount?: number | null;
+          carrier_cost?: number | null;
+          margin_amount?: number | null;
+          currency?: string | null;
+          pricing_mode?: string | null;
+          basis?: string | null;
+          payment_status?: string;
+          invoice_no?: string | null;
+          paid_at?: string | null;
+          computed_at?: string;
+        };
+        Update: {
+          waybill_id?: string;
+          freight_amount?: number | null;
+          carrier_cost?: number | null;
+          margin_amount?: number | null;
+          currency?: string | null;
+          pricing_mode?: string | null;
+          basis?: string | null;
+          payment_status?: string;
+          invoice_no?: string | null;
+          paid_at?: string | null;
+          computed_at?: string;
+        };
+        Relationships: [];
+      };
       waybill_pdfs: {
         Row: {
           id: string;
@@ -797,6 +869,8 @@ export type Database = {
           truck_type_name: string | null;
           shipment_type_name: string | null;
           quantity: number | null;
+          freight_amount: number | null;
+          currency: string | null;
           pickup_date: string | null;
           supplier_name: string | null;
           driver_name: string | null;
@@ -821,6 +895,8 @@ export type Database = {
           truck_type_name?: string | null;
           shipment_type_name?: string | null;
           quantity?: number | null;
+          freight_amount?: number | null;
+          currency?: string | null;
           pickup_date?: string | null;
           supplier_name?: string | null;
           driver_name?: string | null;
@@ -845,6 +921,8 @@ export type Database = {
           truck_type_name?: string | null;
           shipment_type_name?: string | null;
           quantity?: number | null;
+          freight_amount?: number | null;
+          currency?: string | null;
           pickup_date?: string | null;
           supplier_name?: string | null;
           driver_name?: string | null;
@@ -868,7 +946,13 @@ export type Database = {
       request_status: "Draft" | "Submitted" | "Approved" | "Assigned" | "Delivered" | "Rejected" | "Cancelled";
       supplier_status: "active" | "inactive";
       truck_status: "available" | "busy" | "maintenance";
-      user_role: "admin" | "operations" | "dispatch" | "driver" | "finance";
+      user_role:
+        | "admin"
+        | "operations"
+        | "dispatch"
+        | "driver"
+        | "finance"
+        | "client";
       waybill_status: "draft" | "approved";
     };
     CompositeTypes: { [_ in never]: never };

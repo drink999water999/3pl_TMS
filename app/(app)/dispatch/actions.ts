@@ -9,6 +9,7 @@ import {
   podKindSchema,
 } from "@/lib/validation";
 import { nextDispatchStatus, type DispatchStatus } from "@/lib/dispatch";
+import { priceWaybill } from "@/lib/pricing-server";
 import type { TablesInsert } from "@/lib/database.types";
 
 type Result = { error?: string };
@@ -64,6 +65,7 @@ export async function createDispatch(
       truck_id: v.truck_id,
       driver_id: v.driver_id,
       truck_type_id: truck?.truck_type_id ?? v.truck_type_id,
+      carrier_cost: v.carrier_cost,
       notes: v.notes,
       created_by: uid,
       updated_by: uid,
@@ -75,6 +77,7 @@ export async function createDispatch(
       supplier_id: v.supplier_id,
       supplier_truck: v.supplier_truck,
       truck_type_id: v.truck_type_id,
+      carrier_cost: v.carrier_cost,
       notes: v.notes,
       created_by: uid,
       updated_by: uid,
@@ -118,8 +121,25 @@ export async function advanceDispatch(
       error: "Dispatch was updated by someone else — refresh and retry.",
     };
 
+  // On Dispatched the trigger has just created the waybill — price it now.
+  if (to === "Dispatched") {
+    const { data: wb } = await supabase
+      .from("waybills")
+      .select("id")
+      .eq("dispatch_id", id)
+      .maybeSingle();
+    if (wb) {
+      try {
+        await priceWaybill(wb.id);
+      } catch {
+        // Pricing is best-effort; admin/finance can recalc on the waybill.
+      }
+    }
+  }
+
   revalidatePath("/dispatch");
   revalidatePath(`/dispatch/${id}`);
+  revalidatePath("/waybills");
   return {};
 }
 

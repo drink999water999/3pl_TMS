@@ -6,7 +6,7 @@ import { SearchInput } from "@/components/app/search-input";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 
 export const metadata = { title: "Waybills" };
 
@@ -18,7 +18,7 @@ export default async function WaybillsPage({
 }: {
   searchParams: { q?: string; status?: string };
 }) {
-  await requireRole(["admin", "operations", "dispatch"]);
+  await requireRole(["admin", "operations", "dispatch", "client", "finance"]);
   const q = searchParams.q?.trim();
   const status = STATUSES.includes(searchParams.status as WbStatus)
     ? (searchParams.status as WbStatus)
@@ -27,7 +27,9 @@ export default async function WaybillsPage({
   const supabase = await createClient();
   let query = supabase
     .from("waybills")
-    .select("id, waybill_no, request_id, client_name, status, issued_at");
+    .select(
+      "id, waybill_no, request_id, client_name, status, issued_at, freight_amount, currency",
+    );
   if (status) query = query.eq("status", status);
   if (q)
     query = query.or(`waybill_no.ilike.%${q}%,client_name.ilike.%${q}%`);
@@ -79,6 +81,7 @@ export default async function WaybillsPage({
             <TH>Waybill #</TH>
             <TH>Request #</TH>
             <TH>Client</TH>
+            <TH>Amount</TH>
             <TH>Issued</TH>
             <TH>Status</TH>
           </TR>
@@ -86,7 +89,7 @@ export default async function WaybillsPage({
         <TBody>
           {(waybills ?? []).length === 0 ? (
             <TR>
-              <TD colSpan={5} className="text-center text-muted-foreground">
+              <TD colSpan={6} className="text-center text-muted-foreground">
                 No waybills yet. They appear automatically when a dispatch is
                 marked Dispatched.
               </TD>
@@ -104,6 +107,11 @@ export default async function WaybillsPage({
                 </TD>
                 <TD>{requestNo(w.request_id)}</TD>
                 <TD>{w.client_name ?? "—"}</TD>
+                <TD>
+                  {w.freight_amount != null
+                    ? formatMoney(w.freight_amount, w.currency ?? "SAR")
+                    : "—"}
+                </TD>
                 <TD>{formatDate(w.issued_at)}</TD>
                 <TD>
                   <Badge

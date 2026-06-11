@@ -6,6 +6,8 @@ import {
   Building2,
   PackageCheck,
   ScrollText,
+  UsersRound,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import type { Role } from "@/lib/types";
@@ -22,13 +24,13 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Dashboard",
     href: "/dashboard",
     icon: LayoutDashboard,
-    roles: ["admin", "operations", "dispatch"],
+    roles: ["admin", "operations", "dispatch", "finance", "client"],
   },
   {
     label: "Requests",
     href: "/requests",
     icon: FileText,
-    roles: ["admin", "operations"],
+    roles: ["admin", "operations", "client"],
   },
   {
     label: "Dispatch",
@@ -46,13 +48,25 @@ export const NAV_ITEMS: NavItem[] = [
     label: "Waybills",
     href: "/waybills",
     icon: ScrollText,
-    roles: ["admin", "operations", "dispatch"],
+    roles: ["admin", "operations", "dispatch", "client", "finance"],
   },
   {
     label: "Clients",
     href: "/clients",
     icon: Building2,
     roles: ["admin", "operations"],
+  },
+  {
+    label: "Finance",
+    href: "/finance",
+    icon: Wallet,
+    roles: ["admin", "finance"],
+  },
+  {
+    label: "Users",
+    href: "/users",
+    icon: UsersRound,
+    roles: ["admin"],
   },
   {
     label: "My Deliveries",

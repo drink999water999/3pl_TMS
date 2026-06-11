@@ -24,10 +24,19 @@ import {
   getWaybillPdfUrl,
   emailWaybill,
   regenerateWaybillPdf,
+  recalcWaybillPrice,
+  setWaybillCarrierCost,
 } from "../actions";
 
 type Waybill = Tables<"waybills">;
 type Item = Tables<"request_items">;
+type Billing = {
+  freight_amount: number | null;
+  carrier_cost: number | null;
+  margin_amount: number | null;
+  currency: string | null;
+  basis: string | null;
+} | null;
 
 export function WaybillView({
   waybill,
@@ -36,6 +45,10 @@ export function WaybillView({
   dispatchId,
   hasPdf,
   canManage,
+  canEmail,
+  canSeeMargin,
+  billing,
+  defaultEmail,
 }: {
   waybill: Waybill;
   items: Item[];
@@ -43,6 +56,10 @@ export function WaybillView({
   dispatchId: string;
   hasPdf: boolean;
   canManage: boolean;
+  canEmail: boolean;
+  canSeeMargin: boolean;
+  billing: Billing;
+  defaultEmail: string;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -112,7 +129,7 @@ export function WaybillView({
           <Button variant="outline" onClick={() => window.print()}>
             <Printer className="h-4 w-4" /> Print
           </Button>
-          {canManage ? (
+          {canEmail ? (
             <Button
               variant="outline"
               disabled={busy || !hasPdf}
@@ -143,14 +160,19 @@ export function WaybillView({
           className="text-brand-navy hover:underline"
         >
           {requestNo}
-        </Link>{" "}
-        ·{" "}
-        <Link
-          href={`/dispatch/${dispatchId}`}
-          className="text-brand-navy hover:underline"
-        >
-          View dispatch
         </Link>
+        {canManage ? (
+          <>
+            {" "}
+            ·{" "}
+            <Link
+              href={`/dispatch/${dispatchId}`}
+              className="text-brand-navy hover:underline"
+            >
+              View dispatch
+            </Link>
+          </>
+        ) : null}
       </div>
 
       <div className="space-y-4">
@@ -231,10 +253,38 @@ export function WaybillView({
             <Field label="Supplier" value={waybill.supplier_name} />
           </Grid>
         </Section>
+
+        <Section title="Charges">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-muted-foreground">
+              Total freight charge
+            </span>
+            <span className="text-lg font-bold text-brand-navy">
+              {waybill.freight_amount != null
+                ? formatMoney(
+                    waybill.freight_amount,
+                    waybill.currency ?? "SAR",
+                  )
+                : "Not priced yet"}
+            </span>
+          </div>
+        </Section>
       </div>
 
+      {canSeeMargin ? (
+        <BillingPanel
+          waybillId={waybill.id}
+          billing={billing}
+          currency={waybill.currency ?? billing?.currency ?? "SAR"}
+        />
+      ) : null}
+
       {emailing ? (
-        <EmailDialog waybillId={waybill.id} onClose={() => setEmailing(false)} />
+        <EmailDialog
+          waybillId={waybill.id}
+          defaultEmail={defaultEmail}
+          onClose={() => setEmailing(false)}
+        />
       ) : null}
     </div>
   );
@@ -276,15 +326,130 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+function BillingPanel({
+  waybillId,
+  billing,
+  currency,
+}: {
+  waybillId: string;
+  billing: Billing;
+  currency: string;
+}) {
+  const router = useRouter();
+  const [cost, setCost] = useState(billing?.carrier_cost?.toString() ?? "");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const saveCost = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await setWaybillCarrierCost(waybillId, cost);
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    router.refresh();
+  };
+
+  const recalc = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await recalcWaybillPrice(waybillId);
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    router.refresh();
+  };
+
+  const money = (v: number | null | undefined) =>
+    v != null ? formatMoney(v, currency) : "—";
+
+  return (
+    <Card className="mt-4 border-brand-navy/20 bg-brand-navy/[0.03] p-4 print:hidden">
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-brand-navy">
+          Billing &amp; margin{" "}
+          <span className="font-normal text-muted-foreground">
+            · internal only
+          </span>
+        </h2>
+        <Button variant="ghost" size="sm" disabled={busy} onClick={recalc}>
+          <RefreshCw className="h-4 w-4" /> Recalculate
+        </Button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Freight (revenue)
+          </p>
+          <p className="mt-0.5 text-base font-semibold">
+            {money(billing?.freight_amount)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Carrier cost
+          </p>
+          <p className="mt-0.5 text-base font-semibold">
+            {money(billing?.carrier_cost)}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            Margin (take)
+          </p>
+          <p className="mt-0.5 text-base font-semibold text-emerald-700">
+            {money(billing?.margin_amount)}
+            {billing?.margin_amount != null &&
+            billing?.freight_amount != null &&
+            billing.freight_amount > 0
+              ? ` · ${Math.round(
+                  (billing.margin_amount / billing.freight_amount) * 100,
+                )}%`
+              : ""}
+          </p>
+        </div>
+      </div>
+
+      {billing?.basis ? (
+        <p className="mt-2 text-xs text-muted-foreground">{billing.basis}</p>
+      ) : null}
+
+      <div className="mt-4 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-end">
+        <div className="flex-1 space-y-1.5">
+          <Label>Carrier cost ({currency})</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={cost}
+            onChange={(e) => setCost(e.target.value)}
+            placeholder="What you pay the carrier"
+          />
+        </div>
+        <Button disabled={busy} onClick={saveCost}>
+          Save &amp; recalc margin
+        </Button>
+      </div>
+
+      {error ? (
+        <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </Card>
+  );
+}
+
 function EmailDialog({
   waybillId,
+  defaultEmail,
   onClose,
 }: {
   waybillId: string;
+  defaultEmail: string;
   onClose: () => void;
 }) {
   const router = useRouter();
-  const [to, setTo] = useState("");
+  const [to, setTo] = useState(defaultEmail ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);

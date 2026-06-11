@@ -9,4 +9,5 @@ export const ROLE_LABELS: Record<Role, string> = {
   dispatch: "Dispatch",
   driver: "Driver",
   finance: "Finance",
+  client: "Client",
 };

@@ -562,7 +562,7 @@ function RateDialog({
       truck_type_id: rate?.truck_type_id ?? "",
       shipment_type_id: rate?.shipment_type_id ?? "",
       rate: rate?.rate?.toString() ?? "",
-      currency: rate?.currency ?? "USD",
+      currency: rate?.currency ?? "SAR",
       effective_from: rate?.effective_from ?? "",
       effective_to: rate?.effective_to ?? "",
     },

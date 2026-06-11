@@ -30,6 +30,19 @@ export const clientSchema = z.object({
   billing_address: optionalText,
   notes: optionalText,
   is_active: z.boolean().default(true),
+  // Pricing configuration
+  pricing_mode: z.enum(["fixed", "per_km"]).default("fixed"),
+  currency: z.string().min(1).default("SAR"),
+  rate_per_km: optionalNumber,
+  base_charge: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? 0 : Number(v)),
+    z.number().min(0, "Base charge can't be negative"),
+  ),
+  margin_type: z.preprocess(
+    emptyToNull,
+    z.enum(["percent", "fixed"]).nullable(),
+  ),
+  margin_value: optionalNumber,
 });
 export type ClientInput = z.input<typeof clientSchema>;
 
@@ -57,7 +70,7 @@ export const contractRateSchema = z.object({
   truck_type_id: optionalUuid,
   shipment_type_id: optionalUuid,
   rate: z.preprocess((v) => Number(v), z.number().positive("Rate must be > 0")),
-  currency: z.string().min(1).default("USD"),
+  currency: z.string().min(1).default("SAR"),
   effective_from: optionalText,
   effective_to: optionalText,
 });
@@ -109,6 +122,7 @@ export const requestSchema = z.object({
   quantity: optionalNumber,
   weight: optionalNumber,
   pallets: optionalInt,
+  distance_km: optionalNumber,
   required_pickup_at: optionalText,
   delivery_date: optionalText,
   special_instructions: optionalText,
@@ -134,6 +148,7 @@ export const dispatchSchema = z
     supplier_id: optionalUuid,
     supplier_truck: optionalText,
     truck_type_id: optionalUuid,
+    carrier_cost: optionalNumber,
     notes: optionalText,
   })
   .superRefine((v, ctx) => {
@@ -174,3 +189,33 @@ export const exceptionSchema = z.object({
 export type ExceptionInput = z.input<typeof exceptionSchema>;
 
 export const podKindSchema = z.enum(["photo", "signed_note"]);
+
+// --- Users & registration -----------------------------------------------------
+const STAFF_ROLES = [
+  "admin",
+  "operations",
+  "dispatch",
+  "driver",
+  "finance",
+] as const;
+
+export const staffUserSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+  full_name: z.string().min(1, "Name is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  role: z.enum(STAFF_ROLES),
+});
+export type StaffUserInput = z.input<typeof staffUserSchema>;
+
+export const registerSchema = z.object({
+  full_name: z.string().min(1, "Your name is required"),
+  company_name: z.string().min(1, "Company name is required"),
+  email: z.string().email("Enter a valid email"),
+  phone: optionalText,
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+export type RegisterInput = z.input<typeof registerSchema>;
+
+export const passwordSchema = z
+  .string()
+  .min(8, "Password must be at least 8 characters");

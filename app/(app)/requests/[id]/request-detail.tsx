@@ -60,6 +60,7 @@ export function RequestDetail({
   locations,
   shipmentTypes,
   truckTypes,
+  lockClientId,
 }: {
   request: Request;
   items: Item[];
@@ -70,6 +71,7 @@ export function RequestDetail({
   locations: Loc[];
   shipmentTypes: Lookup[];
   truckTypes: Lookup[];
+  lockClientId?: string | null;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -110,6 +112,7 @@ export function RequestDetail({
           locations={locations}
           shipmentTypes={shipmentTypes}
           truckTypes={truckTypes}
+          lockClientId={lockClientId}
           onDone={() => setEditing(false)}
           onCancel={() => setEditing(false)}
         />

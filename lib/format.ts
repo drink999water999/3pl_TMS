@@ -11,7 +11,7 @@ export function formatDate(value: string | null | undefined): string {
 
 export function formatMoney(
   value: number | null | undefined,
-  currency = "USD",
+  currency = "SAR",
 ): string {
   if (value == null) return "—";
   try {

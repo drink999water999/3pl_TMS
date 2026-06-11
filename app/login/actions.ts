@@ -17,10 +17,28 @@ export async function signIn(
   }
 
   const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
   if (error) {
     return { error: error.message };
+  }
+
+  // Block sign-in for accounts that are deactivated or awaiting approval.
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("active")
+    .eq("id", data.user.id)
+    .maybeSingle();
+
+  if (!profile || !profile.active) {
+    await supabase.auth.signOut();
+    return {
+      error:
+        "Your account is pending administrator approval. You'll be able to sign in once it's approved.",
+    };
   }
 
   redirect("/dashboard");

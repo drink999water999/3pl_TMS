@@ -218,6 +218,28 @@ export function waybillDocument({
           </View>
         </View>
 
+        {/* 5) Charges (client-facing freight amount) */}
+        {waybill.freight_amount != null ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Charges</Text>
+            <View style={styles.sectionBody}>
+              <View
+                style={[styles.row, { justifyContent: "space-between", marginBottom: 0 }]}
+              >
+                <Text style={{ fontFamily: "Helvetica-Bold", color: NAVY }}>
+                  Total freight charge
+                </Text>
+                <Text style={{ fontFamily: "Helvetica-Bold", color: NAVY }}>
+                  {formatMoney(
+                    waybill.freight_amount,
+                    waybill.currency ?? "SAR",
+                  )}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+
         <View style={styles.footer} fixed>
           <Text>{appName}</Text>
           <Text>

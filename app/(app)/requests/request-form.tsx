@@ -42,6 +42,7 @@ export function RequestForm({
   locations,
   shipmentTypes,
   truckTypes,
+  lockClientId,
   onDone,
   onCancel,
 }: {
@@ -51,13 +52,14 @@ export function RequestForm({
   locations: Loc[];
   shipmentTypes: Lookup[];
   truckTypes: Lookup[];
+  lockClientId?: string | null;
   onDone?: () => void;
   onCancel?: () => void;
 }) {
   const router = useRouter();
 
   const [clientId, setClientId] = useState<string | null>(
-    request?.client_id ?? null,
+    request?.client_id ?? lockClientId ?? null,
   );
   const [pickupId, setPickupId] = useState<string | null>(
     request?.pickup_location_id ?? null,
@@ -76,6 +78,7 @@ export function RequestForm({
       quantity: request?.quantity?.toString() ?? "",
       weight: request?.weight?.toString() ?? "",
       pallets: request?.pallets?.toString() ?? "",
+      distance_km: request?.distance_km?.toString() ?? "",
       required_pickup_at: request?.required_pickup_at?.slice(0, 16) ?? "",
       delivery_date: request?.delivery_date?.slice(0, 10) ?? "",
       special_instructions: request?.special_instructions ?? "",
@@ -115,6 +118,7 @@ export function RequestForm({
       quantity: values.quantity,
       weight: values.weight,
       pallets: values.pallets,
+      distance_km: values.distance_km,
       required_pickup_at: values.required_pickup_at,
       delivery_date: values.delivery_date,
       special_instructions: values.special_instructions,
@@ -141,12 +145,19 @@ export function RequestForm({
       <Card className="space-y-4 p-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Client" required>
-            <SearchableSelect
-              options={clients.map((c) => ({ value: c.id, label: c.name }))}
-              value={clientId}
-              onChange={onClientChange}
-              placeholder="Select a client…"
-            />
+            {lockClientId ? (
+              <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                {clients.find((c) => c.id === lockClientId)?.name ??
+                  "Your company"}
+              </div>
+            ) : (
+              <SearchableSelect
+                options={clients.map((c) => ({ value: c.id, label: c.name }))}
+                value={clientId}
+                onChange={onClientChange}
+                placeholder="Select a client…"
+              />
+            )}
           </Field>
           <Field label="PO reference">
             <Input {...register("po_reference")} placeholder="Optional" />
@@ -202,6 +213,12 @@ export function RequestForm({
           </Field>
           <Field label="Pallets">
             <Input type="number" step="1" min="0" {...register("pallets")} />
+          </Field>
+          <Field label="Distance (km)">
+            <Input type="number" step="0.1" min="0" {...register("distance_km")} />
+            <p className="text-xs text-muted-foreground">
+              Used for distance-based pricing. Maps auto-calc comes later.
+            </p>
           </Field>
           <Field label="Required pickup (date & time)">
             <Input type="datetime-local" {...register("required_pickup_at")} />

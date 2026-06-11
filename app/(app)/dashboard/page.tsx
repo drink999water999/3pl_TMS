@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { RealtimeRefresh } from "@/components/app/realtime-refresh";
 import { DashboardFilters } from "./dashboard-filters";
 import { DashboardView } from "./dashboard-view";
+import { ClientDashboard } from "./client-dashboard";
 
 export const metadata = { title: "Dashboard" };
 
@@ -18,6 +19,27 @@ export default async function DashboardPage({
   const { profile } = await requireUser();
   if (!profile) redirect("/login");
   if (profile.role === "driver") redirect("/my-dispatches");
+
+  // Clients get their own dashboard scoped to their data (RLS enforces it).
+  if (profile.role === "client") {
+    const supa = await createClient();
+    const [reqRes, wbRes] = await Promise.all([
+      supa
+        .from("transport_requests")
+        .select("id, request_no, status, created_at, delivery_date")
+        .order("created_at", { ascending: false }),
+      supa
+        .from("waybills")
+        .select("id, waybill_no, status, freight_amount, currency, issued_at")
+        .order("issued_at", { ascending: false }),
+    ]);
+    return (
+      <ClientDashboard
+        requests={reqRes.data ?? []}
+        waybills={wbRes.data ?? []}
+      />
+    );
+  }
 
   const rangeKey =
     searchParams.range && RANGES[searchParams.range] ? searchParams.range : "30";

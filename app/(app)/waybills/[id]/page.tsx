@@ -10,8 +10,16 @@ export default async function WaybillDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { profile } = await requireRole(["admin", "operations", "dispatch"]);
+  const { profile } = await requireRole([
+    "admin",
+    "operations",
+    "dispatch",
+    "client",
+    "finance",
+  ]);
   const canManage = profile.role === "admin" || profile.role === "dispatch";
+  const canEmail = canManage || profile.role === "client";
+  const canSeeMargin = profile.role === "admin" || profile.role === "finance";
   const supabase = await createClient();
 
   const { data: waybill } = await supabase
@@ -29,7 +37,7 @@ export default async function WaybillDetailPage({
       .order("created_at"),
     supabase
       .from("transport_requests")
-      .select("request_no")
+      .select("request_no, client_id")
       .eq("id", waybill.request_id)
       .maybeSingle(),
     supabase
@@ -40,6 +48,34 @@ export default async function WaybillDetailPage({
       .maybeSingle(),
   ]);
 
+  // Resolve the client's email so the Email dialog can prefill the recipient.
+  let defaultEmail = "";
+  if (request.data?.client_id) {
+    const { data: client } = await supabase
+      .from("clients")
+      .select("email")
+      .eq("id", request.data.client_id)
+      .maybeSingle();
+    defaultEmail = client?.email ?? "";
+  }
+
+  // Internal billing (carrier cost + margin) — only fetched for admin/finance.
+  let billing: {
+    freight_amount: number | null;
+    carrier_cost: number | null;
+    margin_amount: number | null;
+    currency: string | null;
+    basis: string | null;
+  } | null = null;
+  if (canSeeMargin) {
+    const { data } = await supabase
+      .from("waybill_billing")
+      .select("freight_amount, carrier_cost, margin_amount, currency, basis")
+      .eq("waybill_id", params.id)
+      .maybeSingle();
+    billing = data;
+  }
+
   return (
     <WaybillView
       waybill={waybill}
@@ -48,6 +84,10 @@ export default async function WaybillDetailPage({
       dispatchId={waybill.dispatch_id}
       hasPdf={!!pdf.data}
       canManage={canManage}
+      canEmail={canEmail}
+      canSeeMargin={canSeeMargin}
+      billing={billing}
+      defaultEmail={defaultEmail}
     />
   );
 }

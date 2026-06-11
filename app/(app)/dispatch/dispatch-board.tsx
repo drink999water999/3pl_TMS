@@ -205,6 +205,7 @@ function DispatchDialog({
   const [supplierId, setSupplierId] = useState<string | null>(null);
   const [supplierTruck, setSupplierTruck] = useState("");
   const [truckTypeId, setTruckTypeId] = useState("");
+  const [carrierCost, setCarrierCost] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -244,6 +245,7 @@ function DispatchDialog({
       supplier_id: assignment === "outsourced" ? supplierId : null,
       supplier_truck: assignment === "outsourced" ? supplierTruck : null,
       truck_type_id: assignment === "outsourced" ? truckTypeId : null,
+      carrier_cost: carrierCost,
       notes,
     });
     setSaving(false);
@@ -344,6 +346,22 @@ function DispatchDialog({
             </div>
           </>
         )}
+
+        <div className="space-y-1.5">
+          <Label>Carrier cost</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={carrierCost}
+            onChange={(e) => setCarrierCost(e.target.value)}
+            placeholder="What you pay the carrier (optional)"
+          />
+          <p className="text-xs text-muted-foreground">
+            Used to compute margin. Leave blank to use the client&apos;s markup
+            rule. Admin/finance can also set this later on the waybill.
+          </p>
+        </div>
 
         <div className="space-y-1.5">
           <Label>Notes</Label>

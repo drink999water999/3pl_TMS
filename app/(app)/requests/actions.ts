@@ -7,11 +7,17 @@ import { requestSchema, requestItemSchema } from "@/lib/validation";
 
 type Result = { error?: string };
 
-// Operations + Admin can create/edit/submit/cancel requests (matches RLS).
+// Operations + Admin manage all requests; clients manage their own (RLS scopes
+// every client query to their linked company).
 async function staffCtx() {
-  const { profile } = await requireRole(["admin", "operations"]);
+  const { profile } = await requireRole(["admin", "operations", "client"]);
   const supabase = await createClient();
-  return { supabase, uid: profile.id };
+  return {
+    supabase,
+    uid: profile.id,
+    role: profile.role,
+    clientId: profile.client_id,
+  };
 }
 
 // Approve / reject is a manager action — Admin only.
@@ -40,11 +46,23 @@ export async function createRequest(
     parsedItems.push(r.data);
   }
 
-  const { supabase, uid } = await staffCtx();
+  const { supabase, uid, role, clientId } = await staffCtx();
+  // Clients can only create requests for their own linked company.
+  const effectiveClientId =
+    role === "client" ? clientId : parsed.data.client_id;
+  if (!effectiveClientId)
+    return {
+      error:
+        role === "client"
+          ? "Your account isn't linked to a company yet — contact an administrator."
+          : "Select a client.",
+    };
+
   const { data, error } = await supabase
     .from("transport_requests")
     .insert({
       ...parsed.data,
+      client_id: effectiveClientId,
       request_no: "", // trigger fills TR-0001
       status: "Draft",
       created_by: uid,
@@ -74,10 +92,14 @@ export async function updateRequest(
   if (!parsed.success)
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
 
-  const { supabase, uid } = await staffCtx();
+  const { supabase, uid, role, clientId } = await staffCtx();
+  const payload =
+    role === "client" && clientId
+      ? { ...parsed.data, client_id: clientId, updated_by: uid }
+      : { ...parsed.data, updated_by: uid };
   const { data, error } = await supabase
     .from("transport_requests")
-    .update({ ...parsed.data, updated_by: uid })
+    .update(payload)
     .eq("id", id)
     .eq("status", "Draft") // only drafts are editable
     .select("id");

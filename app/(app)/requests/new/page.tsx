@@ -8,7 +8,8 @@ import { RequestForm } from "../request-form";
 export const metadata = { title: "New request" };
 
 export default async function NewRequestPage() {
-  await requireRole(["admin", "operations"]);
+  const { profile } = await requireRole(["admin", "operations", "client"]);
+  const lockClientId = profile.role === "client" ? profile.client_id : null;
   const supabase = await createClient();
 
   const [clients, locations, shipmentTypes, truckTypes] = await Promise.all([
@@ -53,6 +54,7 @@ export default async function NewRequestPage() {
         locations={locations.data ?? []}
         shipmentTypes={shipmentTypes.data ?? []}
         truckTypes={truckTypes.data ?? []}
+        lockClientId={lockClientId}
       />
     </div>
   );

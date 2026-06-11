@@ -4,29 +4,29 @@ import { Truck, FileText, Radar } from "lucide-react";
 import { getUserAndProfile } from "@/lib/auth";
 import { APP_NAME, APP_TAGLINE } from "@/lib/constants";
 import { BrandLogo, BrandMark } from "@/components/app/logo";
-import { LoginForm } from "./login-form";
+import { RegisterForm } from "./register-form";
 
-export const metadata = { title: "Sign in" };
+export const metadata = { title: "Create a client account" };
 
 const FEATURES = [
   {
-    icon: Truck,
-    title: "Dispatch in seconds",
-    text: "Assign own fleet or outsourced trucks with live availability.",
-  },
-  {
     icon: FileText,
-    title: "Instant waybills",
-    text: "Auto-generated waybills with one-click PDF and email.",
+    title: "Submit requests online",
+    text: "Raise transport requests for your shipments in a couple of clicks.",
   },
   {
     icon: Radar,
-    title: "Real-time tracking",
-    text: "Follow every shipment from pickup to proof of delivery.",
+    title: "Track your shipments",
+    text: "Follow each shipment and grab its waybill the moment it's ready.",
+  },
+  {
+    icon: Truck,
+    title: "One place for everything",
+    text: "Your requests and waybills, organized in a single workspace.",
   },
 ];
 
-export default async function LoginPage() {
+export default async function RegisterPage() {
   const { user } = await getUserAndProfile();
   if (user) redirect("/dashboard");
 
@@ -56,15 +56,15 @@ export default async function LoginPage() {
 
         <div className="relative max-w-md">
           <h1 className="text-4xl font-bold leading-tight tracking-tight text-white">
-            Move freight,
+            Ship with
             <br />
             <span className="bg-gradient-to-r from-brand-sky to-brand-orange bg-clip-text text-transparent">
-              not paperwork.
+              {APP_NAME}.
             </span>
           </h1>
           <p className="mt-4 text-sm leading-relaxed text-sky-100/70">
-            {APP_NAME} brings requests, dispatch, waybills, and delivery
-            tracking into one fast workspace.
+            Create a client account to request transport and access your
+            waybills online.
           </p>
 
           <ul className="mt-10 space-y-5">
@@ -93,28 +93,25 @@ export default async function LoginPage() {
           <div className="mb-8 flex flex-col items-center text-center">
             <BrandMark className="h-14 w-14 lg:hidden" />
             <h2 className="mt-4 text-2xl font-bold tracking-tight text-brand-navy lg:mt-0">
-              Welcome back
+              Create a client account
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Sign in to your {APP_NAME} workspace.
+              Sign up to request transport with {APP_NAME}.
             </p>
           </div>
 
           <div className="rounded-2xl border bg-card p-6 shadow-card sm:p-8">
-            <LoginForm />
+            <RegisterForm />
           </div>
 
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            Are you a client?{" "}
+          <p className="mt-6 text-center text-xs text-muted-foreground">
+            Already have an account?{" "}
             <Link
-              href="/register"
+              href="/login"
               className="font-medium text-brand-navy hover:underline"
             >
-              Create an account
+              Sign in
             </Link>
-          </p>
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            Staff accounts are created by an administrator.
           </p>
         </div>
       </section>

@@ -10,7 +10,7 @@ export default async function RequestDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { profile } = await requireRole(["admin", "operations"]);
+  const { profile } = await requireRole(["admin", "operations", "client"]);
   const isAdmin = profile.role === "admin";
   const supabase = await createClient();
 
@@ -83,6 +83,9 @@ export default async function RequestDetailPage({
     by: personName(h.changed_by),
   }));
 
+  const lockClientId =
+    profile.role === "client" ? request.client_id : null;
+
   return (
     <RequestDetail
       request={request}
@@ -94,6 +97,7 @@ export default async function RequestDetailPage({
       locations={allLocations}
       shipmentTypes={shipmentTypes.data ?? []}
       truckTypes={truckTypes.data ?? []}
+      lockClientId={lockClientId}
     />
   );
 }
