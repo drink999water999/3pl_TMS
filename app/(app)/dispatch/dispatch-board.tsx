@@ -206,6 +206,7 @@ function DispatchDialog({
   const [supplierTruck, setSupplierTruck] = useState("");
   const [truckTypeId, setTruckTypeId] = useState("");
   const [carrierCost, setCarrierCost] = useState("");
+  const [customerCharge, setCustomerCharge] = useState("");
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -246,6 +247,7 @@ function DispatchDialog({
       supplier_truck: assignment === "outsourced" ? supplierTruck : null,
       truck_type_id: assignment === "outsourced" ? truckTypeId : null,
       carrier_cost: carrierCost,
+      customer_charge: customerCharge,
       notes,
     });
     setSaving(false);
@@ -360,6 +362,22 @@ function DispatchDialog({
           <p className="text-xs text-muted-foreground">
             Used to compute margin. Leave blank to use the client&apos;s markup
             rule. Admin/finance can also set this later on the waybill.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label>Customer charge</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={customerCharge}
+            onChange={(e) => setCustomerCharge(e.target.value)}
+            placeholder="Override the client's pricing (optional)"
+          />
+          <p className="text-xs text-muted-foreground">
+            What the customer is billed. Leave blank to auto-price from the
+            client&apos;s rate (fixed or per-km).
           </p>
         </div>
 

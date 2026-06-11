@@ -181,6 +181,7 @@ export type Database = {
           closed_at: string | null;
           notes: string | null;
           carrier_cost: number | null;
+          customer_charge: number | null;
           created_by: string | null;
           updated_by: string | null;
           created_at: string;
@@ -207,6 +208,7 @@ export type Database = {
           closed_at?: string | null;
           notes?: string | null;
           carrier_cost?: number | null;
+          customer_charge?: number | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;
@@ -233,6 +235,7 @@ export type Database = {
           closed_at?: string | null;
           notes?: string | null;
           carrier_cost?: number | null;
+          customer_charge?: number | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;

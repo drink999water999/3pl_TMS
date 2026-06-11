@@ -32,7 +32,7 @@ export async function priceWaybill(waybillId: string): Promise<void> {
 
   const { data: dispatch } = await admin
     .from("dispatches")
-    .select("carrier_cost, truck_type_id")
+    .select("carrier_cost, customer_charge, truck_type_id")
     .eq("id", wb.dispatch_id)
     .maybeSingle();
 
@@ -64,10 +64,16 @@ export async function priceWaybill(waybillId: string): Promise<void> {
     });
   }
 
-  const freight = computeFreight(pricing, {
-    distanceKm: req.distance_km,
-    rate,
-  });
+  // A manual customer-charge on the dispatch overrides automatic pricing.
+  const override = dispatch?.customer_charge ?? null;
+  const freight =
+    override != null
+      ? {
+          amount: override,
+          currency: pricing.currency,
+          basis: "Manual customer charge",
+        }
+      : computeFreight(pricing, { distanceKm: req.distance_km, rate });
   const margin = computeMargin({
     amount: freight.amount,
     carrierCost: dispatch?.carrier_cost ?? null,

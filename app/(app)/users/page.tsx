@@ -54,15 +54,17 @@ export default async function UsersPage() {
   }));
 
   const pending = users.filter((u) => u.role === "client" && !u.active);
+  // Approved clients are managed under Clients — keep them out of Users.
+  const staff = users.filter((u) => u.role !== "client");
 
   return (
     <div>
       <PageHeader
         title="Users & access"
-        description="Create staff accounts, approve client sign-ups, and manage access."
+        description="Platform staff accounts, plus client sign-ups awaiting approval."
       />
       <UsersManager
-        users={users}
+        users={staff}
         pending={pending}
         clients={clients ?? []}
       />

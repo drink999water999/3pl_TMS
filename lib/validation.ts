@@ -149,6 +149,7 @@ export const dispatchSchema = z
     supplier_truck: optionalText,
     truck_type_id: optionalUuid,
     carrier_cost: optionalNumber,
+    customer_charge: optionalNumber,
     notes: optionalText,
   })
   .superRefine((v, ctx) => {

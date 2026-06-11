@@ -68,6 +68,22 @@ export async function approveClient(
       .single();
     if (cErr) return { error: cErr.message };
     clientId = c.id;
+
+    // Record the registrant as the company's primary contact (so the company
+    // name stays the company, and the person is captured as a contact).
+    const { data: prof } = await admin
+      .from("profiles")
+      .select("full_name, phone")
+      .eq("id", profileId)
+      .maybeSingle();
+    const { data: authUser } = await admin.auth.admin.getUserById(profileId);
+    await admin.from("client_contacts").insert({
+      client_id: clientId,
+      name: prof?.full_name ?? "Primary contact",
+      email: authUser?.user?.email ?? null,
+      phone: prof?.phone ?? null,
+      is_primary: true,
+    });
   }
   if (!clientId)
     return { error: "Pick an existing company or enter a new company name." };

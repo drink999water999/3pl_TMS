@@ -76,6 +76,17 @@ export default async function WaybillDetailPage({
     billing = data;
   }
 
+  // Current manual charge override (lives on the dispatch) for the billing editor.
+  let customerCharge: number | null = null;
+  if (canSeeMargin) {
+    const { data: disp } = await supabase
+      .from("dispatches")
+      .select("customer_charge")
+      .eq("id", waybill.dispatch_id)
+      .maybeSingle();
+    customerCharge = disp?.customer_charge ?? null;
+  }
+
   return (
     <WaybillView
       waybill={waybill}
@@ -87,6 +98,7 @@ export default async function WaybillDetailPage({
       canEmail={canEmail}
       canSeeMargin={canSeeMargin}
       billing={billing}
+      customerCharge={customerCharge}
       defaultEmail={defaultEmail}
     />
   );

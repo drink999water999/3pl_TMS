@@ -183,6 +183,44 @@ export async function setWaybillCarrierCost(
   return {};
 }
 
+// Set BOTH the customer charge (override) and carrier cost on the underlying
+// dispatch, then re-price the waybill (admin / finance).
+export async function setWaybillBilling(
+  id: string,
+  charge: string,
+  cost: string,
+): Promise<Result> {
+  await requireRole(["admin", "finance"]);
+  const admin = createAdminClient();
+  const { data: wb } = await admin
+    .from("waybills")
+    .select("dispatch_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!wb) return { error: "Waybill not found." };
+
+  const toNum = (x: string) => {
+    const t = (x ?? "").trim();
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isNaN(n) || n < 0 ? null : n;
+  };
+
+  const { error } = await admin
+    .from("dispatches")
+    .update({ customer_charge: toNum(charge), carrier_cost: toNum(cost) })
+    .eq("id", wb.dispatch_id);
+  if (error) return { error: error.message };
+
+  try {
+    await priceWaybill(id);
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Could not price waybill." };
+  }
+  revalidatePath(`/waybills/${id}`);
+  return {};
+}
+
 export async function emailWaybill(id: string, to: string): Promise<Result> {
   await requireRole(["admin", "operations", "dispatch", "client"]);
   const supabase = await createClient();

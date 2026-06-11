@@ -66,6 +66,7 @@ export async function createDispatch(
       driver_id: v.driver_id,
       truck_type_id: truck?.truck_type_id ?? v.truck_type_id,
       carrier_cost: v.carrier_cost,
+      customer_charge: v.customer_charge,
       notes: v.notes,
       created_by: uid,
       updated_by: uid,
@@ -78,6 +79,7 @@ export async function createDispatch(
       supplier_truck: v.supplier_truck,
       truck_type_id: v.truck_type_id,
       carrier_cost: v.carrier_cost,
+      customer_charge: v.customer_charge,
       notes: v.notes,
       created_by: uid,
       updated_by: uid,
@@ -138,6 +140,53 @@ export async function advanceDispatch(
   }
 
   revalidatePath("/dispatch");
+  revalidatePath(`/dispatch/${id}`);
+  revalidatePath("/waybills");
+  return {};
+}
+
+// --- Pricing: edit carrier cost + customer charge, then re-price waybill ------
+export async function setDispatchPricing(
+  id: string,
+  version: number,
+  carrierCost: string,
+  customerCharge: string,
+): Promise<Result> {
+  const { supabase, uid } = await ctx();
+  const toNum = (x: string) => {
+    const t = (x ?? "").trim();
+    if (t === "") return null;
+    const n = Number(t);
+    return Number.isNaN(n) || n < 0 ? null : n;
+  };
+
+  const { data, error } = await supabase
+    .from("dispatches")
+    .update({
+      carrier_cost: toNum(carrierCost),
+      customer_charge: toNum(customerCharge),
+      updated_by: uid,
+    })
+    .eq("id", id)
+    .eq("version", version)
+    .select("id");
+  if (error) return { error: error.message };
+  if (!data || data.length === 0)
+    return { error: "Dispatch changed — refresh and retry." };
+
+  const { data: wb } = await supabase
+    .from("waybills")
+    .select("id")
+    .eq("dispatch_id", id)
+    .maybeSingle();
+  if (wb) {
+    try {
+      await priceWaybill(wb.id);
+    } catch {
+      // best-effort
+    }
+  }
+
   revalidatePath(`/dispatch/${id}`);
   revalidatePath("/waybills");
   return {};

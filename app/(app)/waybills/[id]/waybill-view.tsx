@@ -25,7 +25,7 @@ import {
   emailWaybill,
   regenerateWaybillPdf,
   recalcWaybillPrice,
-  setWaybillCarrierCost,
+  setWaybillBilling,
 } from "../actions";
 
 type Waybill = Tables<"waybills">;
@@ -48,6 +48,7 @@ export function WaybillView({
   canEmail,
   canSeeMargin,
   billing,
+  customerCharge,
   defaultEmail,
 }: {
   waybill: Waybill;
@@ -59,6 +60,7 @@ export function WaybillView({
   canEmail: boolean;
   canSeeMargin: boolean;
   billing: Billing;
+  customerCharge: number | null;
   defaultEmail: string;
 }) {
   const router = useRouter();
@@ -275,6 +277,7 @@ export function WaybillView({
         <BillingPanel
           waybillId={waybill.id}
           billing={billing}
+          customerCharge={customerCharge}
           currency={waybill.currency ?? billing?.currency ?? "SAR"}
         />
       ) : null}
@@ -330,12 +333,15 @@ function BillingPanel({
   waybillId,
   billing,
   currency,
+  customerCharge,
 }: {
   waybillId: string;
   billing: Billing;
   currency: string;
+  customerCharge: number | null;
 }) {
   const router = useRouter();
+  const [charge, setCharge] = useState(customerCharge?.toString() ?? "");
   const [cost, setCost] = useState(billing?.carrier_cost?.toString() ?? "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -343,7 +349,7 @@ function BillingPanel({
   const saveCost = async () => {
     setBusy(true);
     setError(null);
-    const res = await setWaybillCarrierCost(waybillId, cost);
+    const res = await setWaybillBilling(waybillId, charge, cost);
     setBusy(false);
     if (res.error) return setError(res.error);
     router.refresh();
@@ -413,8 +419,19 @@ function BillingPanel({
         <p className="mt-2 text-xs text-muted-foreground">{billing.basis}</p>
       ) : null}
 
-      <div className="mt-4 flex flex-col gap-2 border-t pt-3 sm:flex-row sm:items-end">
-        <div className="flex-1 space-y-1.5">
+      <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label>Customer charge ({currency})</Label>
+          <Input
+            type="number"
+            step="0.01"
+            min="0"
+            value={charge}
+            onChange={(e) => setCharge(e.target.value)}
+            placeholder="Blank = auto from client pricing"
+          />
+        </div>
+        <div className="space-y-1.5">
           <Label>Carrier cost ({currency})</Label>
           <Input
             type="number"
@@ -425,8 +442,10 @@ function BillingPanel({
             placeholder="What you pay the carrier"
           />
         </div>
+      </div>
+      <div className="mt-2 flex justify-end">
         <Button disabled={busy} onClick={saveCost}>
-          Save &amp; recalc margin
+          Save &amp; reprice
         </Button>
       </div>
 

@@ -27,6 +27,7 @@ import { DISPATCH_FLOW, nextDispatchStatus } from "@/lib/dispatch";
 import type { Tables } from "@/lib/database.types";
 import {
   advanceDispatch,
+  setDispatchPricing,
   flagIssue,
   resolveIssue,
   uploadPod,
@@ -295,6 +296,8 @@ export function DispatchDetail({
               </p>
             )}
           </Card>
+
+          <DispatchPricingCard dispatch={dispatch} />
 
           <Card className="space-y-3 p-5">
             <h2 className="text-sm font-semibold text-brand-navy">History</h2>
@@ -639,5 +642,69 @@ function FlagDialog({
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function DispatchPricingCard({ dispatch }: { dispatch: Dispatch }) {
+  const router = useRouter();
+  const [cost, setCost] = useState(dispatch.carrier_cost?.toString() ?? "");
+  const [charge, setCharge] = useState(
+    dispatch.customer_charge?.toString() ?? "",
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await setDispatchPricing(
+      dispatch.id,
+      dispatch.version,
+      cost,
+      charge,
+    );
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    router.refresh();
+  };
+
+  return (
+    <Card className="space-y-3 p-5">
+      <h2 className="text-sm font-semibold text-brand-navy">Pricing</h2>
+      <div className="space-y-1.5">
+        <Label>Carrier cost (what we pay)</Label>
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={cost}
+          onChange={(e) => setCost(e.target.value)}
+          placeholder="Optional"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label>Customer charge (what we bill)</Label>
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          value={charge}
+          onChange={(e) => setCharge(e.target.value)}
+          placeholder="Blank = auto from client pricing"
+        />
+      </div>
+      {error ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <Button size="sm" disabled={busy} onClick={save}>
+        Save & reprice
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        Updates the waybill amount and margin. Leave the charge blank to use the
+        client&apos;s configured pricing.
+      </p>
+    </Card>
   );
 }
