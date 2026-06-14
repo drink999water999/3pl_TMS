@@ -877,6 +877,9 @@ export type Database = {
           pickup_date: string | null;
           supplier_name: string | null;
           driver_name: string | null;
+          revision: number;
+          amended_at: string | null;
+          amended_by: string | null;
           created_by: string | null;
           updated_by: string | null;
           created_at: string;
@@ -903,6 +906,9 @@ export type Database = {
           pickup_date?: string | null;
           supplier_name?: string | null;
           driver_name?: string | null;
+          revision?: number;
+          amended_at?: string | null;
+          amended_by?: string | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;
@@ -929,10 +935,76 @@ export type Database = {
           pickup_date?: string | null;
           supplier_name?: string | null;
           driver_name?: string | null;
+          revision?: number;
+          amended_at?: string | null;
+          amended_by?: string | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      credit_notes: {
+        Row: {
+          id: string;
+          credit_no: string;
+          waybill_id: string;
+          amount: number;
+          currency: string;
+          reason: string | null;
+          status: string;
+          created_by: string | null;
+          created_at: string;
+          voided_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          credit_no?: string;
+          waybill_id: string;
+          amount: number;
+          currency?: string;
+          reason?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          voided_at?: string | null;
+        };
+        Update: {
+          id?: string;
+          credit_no?: string;
+          waybill_id?: string;
+          amount?: number;
+          currency?: string;
+          reason?: string | null;
+          status?: string;
+          created_by?: string | null;
+          created_at?: string;
+          voided_at?: string | null;
+        };
+        Relationships: [];
+      };
+      request_comments: {
+        Row: {
+          id: string;
+          request_id: string;
+          author_id: string | null;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          request_id: string;
+          author_id?: string | null;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          request_id?: string;
+          author_id?: string | null;
+          body?: string;
+          created_at?: string;
         };
         Relationships: [];
       };

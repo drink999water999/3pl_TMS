@@ -272,3 +272,37 @@ export async function deleteRequest(id: string): Promise<Result> {
   revalidatePath("/requests");
   return {};
 }
+
+// --- Internal comments on a request -------------------------------------------
+export async function addComment(
+  requestId: string,
+  body: string,
+): Promise<Result> {
+  const { profile } = await requireRole(["admin", "operations"]);
+  const supabase = await createClient();
+  const text = (body ?? "").trim();
+  if (!text) return { error: "Write a comment first." };
+
+  const { error } = await supabase.from("request_comments").insert({
+    request_id: requestId,
+    author_id: profile.id,
+    body: text,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/requests/${requestId}`);
+  return {};
+}
+
+export async function deleteComment(
+  requestId: string,
+  id: string,
+): Promise<Result> {
+  await requireRole(["admin", "operations"]);
+  const supabase = await createClient();
+  // RLS allows admin (any) or the author to delete.
+  const { error } = await supabase.from("request_comments").delete().eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(`/requests/${requestId}`);
+  return {};
+}

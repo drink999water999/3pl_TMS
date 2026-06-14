@@ -123,8 +123,10 @@ export async function advanceDispatch(
       error: "Dispatch was updated by someone else — refresh and retry.",
     };
 
-  // On Dispatched the trigger has just created the waybill — price it now.
-  if (to === "Dispatched") {
+  // On Dispatched the trigger has just created the waybill — price it now. On
+  // Delivered we re-price so a completed shipment always lands in Finance (with
+  // a billing row, even if it still needs a price set).
+  if (to === "Dispatched" || to === "Delivered") {
     const { data: wb } = await supabase
       .from("waybills")
       .select("id")
@@ -351,7 +353,22 @@ export async function closeShipment(
       error: "Only a delivered shipment can be closed — refresh and retry.",
     };
 
+  // Ensure the billing row is current now that the shipment is closed.
+  const { data: wb } = await supabase
+    .from("waybills")
+    .select("id")
+    .eq("dispatch_id", id)
+    .maybeSingle();
+  if (wb) {
+    try {
+      await priceWaybill(wb.id);
+    } catch {
+      // best-effort
+    }
+  }
+
   revalidatePath("/dispatch");
   revalidatePath(`/dispatch/${id}`);
+  revalidatePath("/finance");
   return {};
 }

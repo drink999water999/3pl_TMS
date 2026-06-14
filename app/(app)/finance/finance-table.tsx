@@ -20,9 +20,11 @@ export type FinanceRow = {
   freight_amount: number | null;
   carrier_cost: number | null;
   margin_amount: number | null;
+  credit_amount: number;
   currency: string;
   payment_status: string;
   invoice_no: string | null;
+  needs_pricing: boolean;
 };
 
 const STATUS_VARIANT: Record<string, "default" | "warning" | "success"> = {
@@ -36,15 +38,29 @@ const STATUS_LABEL: Record<string, string> = {
   paid: "Paid",
 };
 
-export function FinanceTable({ rows }: { rows: FinanceRow[] }) {
+export function FinanceTable({
+  rows,
+  needsPricing,
+}: {
+  rows: FinanceRow[];
+  needsPricing: number;
+}) {
   const [filter, setFilter] = useState<string>("all");
 
   const filtered =
     filter === "all"
       ? rows
-      : rows.filter((r) => r.payment_status === filter);
+      : filter === "needs_pricing"
+        ? rows.filter((r) => r.needs_pricing)
+        : rows.filter((r) => r.payment_status === filter);
 
-  const chips = ["all", "unbilled", "invoiced", "paid"];
+  const chips = ["all", "unbilled", "invoiced", "paid", "needs_pricing"];
+  const chipLabel = (c: string) =>
+    c === "all"
+      ? "All"
+      : c === "needs_pricing"
+        ? `Needs pricing${needsPricing > 0 ? ` (${needsPricing})` : ""}`
+        : STATUS_LABEL[c];
 
   return (
     <div>
@@ -58,10 +74,12 @@ export function FinanceTable({ rows }: { rows: FinanceRow[] }) {
               "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
               filter === c
                 ? "border-brand-navy bg-brand-navy text-white"
-                : "border-input text-muted-foreground hover:bg-muted",
+                : c === "needs_pricing" && needsPricing > 0
+                  ? "border-amber-400 text-amber-700 hover:bg-amber-50"
+                  : "border-input text-muted-foreground hover:bg-muted",
             )}
           >
-            {c === "all" ? "All" : STATUS_LABEL[c]}
+            {chipLabel(c)}
           </button>
         ))}
       </div>
@@ -72,6 +90,7 @@ export function FinanceTable({ rows }: { rows: FinanceRow[] }) {
             <TH>Waybill #</TH>
             <TH>Client</TH>
             <TH>Revenue</TH>
+            <TH>Credits</TH>
             <TH>Cost</TH>
             <TH>Margin</TH>
             <TH>Payment</TH>
@@ -81,8 +100,8 @@ export function FinanceTable({ rows }: { rows: FinanceRow[] }) {
         <TBody>
           {filtered.length === 0 ? (
             <TR>
-              <TD colSpan={7} className="text-center text-muted-foreground">
-                No priced waybills{filter === "all" ? " yet" : ` (${STATUS_LABEL[filter]})`}.
+              <TD colSpan={8} className="text-center text-muted-foreground">
+                Nothing here{filter === "all" ? " yet" : ""}.
               </TD>
             </TR>
           ) : (
@@ -121,7 +140,16 @@ function Row({ row }: { row: FinanceRow }) {
         </Link>
       </TD>
       <TD>{row.client_name}</TD>
-      <TD>{money(row.freight_amount)}</TD>
+      <TD>
+        {row.needs_pricing ? (
+          <Badge variant="warning">Needs pricing</Badge>
+        ) : (
+          money(row.freight_amount)
+        )}
+      </TD>
+      <TD className={row.credit_amount > 0 ? "text-red-600" : ""}>
+        {row.credit_amount > 0 ? `−${money(row.credit_amount)}` : "—"}
+      </TD>
       <TD>{money(row.carrier_cost)}</TD>
       <TD className="font-medium text-emerald-700">{money(row.margin_amount)}</TD>
       <TD>

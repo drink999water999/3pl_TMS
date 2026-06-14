@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { WaybillView } from "./waybill-view";
 
 export const metadata = { title: "Waybill" };
@@ -20,6 +21,7 @@ export default async function WaybillDetailPage({
   const canManage = profile.role === "admin" || profile.role === "dispatch";
   const canEmail = canManage || profile.role === "client";
   const canSeeMargin = profile.role === "admin" || profile.role === "finance";
+  const canManageCredit = canSeeMargin; // admin + finance issue/void credit notes
   const supabase = await createClient();
 
   const { data: waybill } = await supabase
@@ -48,7 +50,10 @@ export default async function WaybillDetailPage({
       .maybeSingle(),
   ]);
 
-  // Resolve the client's email so the Email dialog can prefill the recipient.
+  // Resolve the client's email so the Email dialog prefills the recipient.
+  // Prefer clients.email; fall back to the client's primary contact (or any
+  // contact) email. Contacts are read via the service role so the default works
+  // for every staff role regardless of client_contacts RLS.
   let defaultEmail = "";
   if (request.data?.client_id) {
     const { data: client } = await supabase
@@ -57,6 +62,17 @@ export default async function WaybillDetailPage({
       .eq("id", request.data.client_id)
       .maybeSingle();
     defaultEmail = client?.email ?? "";
+
+    if (!defaultEmail) {
+      const admin = createAdminClient();
+      const { data: contacts } = await admin
+        .from("client_contacts")
+        .select("email, is_primary")
+        .eq("client_id", request.data.client_id)
+        .not("email", "is", null);
+      const primary = (contacts ?? []).find((c) => c.is_primary && c.email);
+      defaultEmail = primary?.email ?? (contacts ?? []).find((c) => c.email)?.email ?? "";
+    }
   }
 
   // Internal billing (carrier cost + margin) — only fetched for admin/finance.
@@ -87,6 +103,13 @@ export default async function WaybillDetailPage({
     customerCharge = disp?.customer_charge ?? null;
   }
 
+  // Credit notes raised against this waybill (RLS scopes visibility).
+  const { data: creditNotes } = await supabase
+    .from("credit_notes")
+    .select("id, credit_no, amount, currency, reason, status, created_at")
+    .eq("waybill_id", params.id)
+    .order("created_at", { ascending: false });
+
   return (
     <WaybillView
       waybill={waybill}
@@ -97,6 +120,8 @@ export default async function WaybillDetailPage({
       canManage={canManage}
       canEmail={canEmail}
       canSeeMargin={canSeeMargin}
+      canManageCredit={canManageCredit}
+      creditNotes={creditNotes ?? []}
       billing={billing}
       customerCharge={customerCharge}
       defaultEmail={defaultEmail}

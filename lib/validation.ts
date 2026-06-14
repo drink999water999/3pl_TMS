@@ -220,3 +220,36 @@ export type RegisterInput = z.input<typeof registerSchema>;
 export const passwordSchema = z
   .string()
   .min(8, "Password must be at least 8 characters");
+
+// --- Waybill amendment + credit notes -----------------------------------------
+// Editable snapshot fields on an approved waybill (corrections). All optional;
+// only provided fields are written.
+export const amendWaybillSchema = z.object({
+  client_name: optionalText,
+  pickup_address: optionalText,
+  delivery_address: optionalText,
+  truck_number: optionalText,
+  truck_type_name: optionalText,
+  shipment_type_name: optionalText,
+  driver_name: optionalText,
+  supplier_name: optionalText,
+  quantity: optionalNumber,
+  pickup_date: optionalText,
+});
+export type AmendWaybillInput = z.input<typeof amendWaybillSchema>;
+
+export const creditNoteSchema = z.object({
+  amount: z.preprocess(
+    (v) => Number(v),
+    z.number().positive("Amount must be greater than 0"),
+  ),
+  reason: optionalText,
+});
+export type CreditNoteInput = z.input<typeof creditNoteSchema>;
+
+// --- Driver login provisioning ------------------------------------------------
+export const driverLoginSchema = z.object({
+  email: z.string().email("Enter a valid email"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+});
+export type DriverLoginInput = z.input<typeof driverLoginSchema>;

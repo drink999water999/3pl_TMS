@@ -9,6 +9,7 @@ import { priceWaybill } from "@/lib/pricing-server";
 import { requireRole } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
 import { waybillDocument } from "@/lib/waybill-document";
+import { amendWaybillSchema, creditNoteSchema } from "@/lib/validation";
 
 type Result = { error?: string };
 type SupabaseServer = Awaited<ReturnType<typeof createClient>>;
@@ -277,5 +278,98 @@ export async function emailWaybill(id: string, to: string): Promise<Result> {
   if (sendErr) return { error: sendErr.message };
 
   revalidatePath(`/waybills/${id}`);
+  return {};
+}
+
+
+// --- Amend an (approved) waybill in place -------------------------------------
+// Mistakes happen. Admin/dispatch can correct the snapshot fields, which bumps
+// the revision, stamps who/when, and regenerates the PDF. The waybill number is
+// preserved so the document history stays traceable.
+export async function amendWaybill(
+  id: string,
+  input: unknown,
+): Promise<Result> {
+  const { supabase, uid } = await ctx();
+  const parsed = amendWaybillSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const { data: current } = await supabase
+    .from("waybills")
+    .select("revision")
+    .eq("id", id)
+    .maybeSingle();
+  if (!current) return { error: "Waybill not found." };
+
+  const { error } = await supabase
+    .from("waybills")
+    .update({
+      ...parsed.data,
+      revision: (current.revision ?? 0) + 1,
+      amended_at: nowIso(),
+      amended_by: uid,
+      updated_by: uid,
+    })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  // Regenerate the PDF so the document matches the correction.
+  const pdf = await buildAndStorePdf(supabase, id);
+  if (pdf.error)
+    return { error: `Amended, but PDF regeneration failed: ${pdf.error}` };
+
+  revalidatePath("/waybills");
+  revalidatePath(`/waybills/${id}`);
+  revalidatePath("/finance");
+  return {};
+}
+
+// --- Credit notes (billing corrections against a waybill) ---------------------
+export async function issueCreditNote(
+  waybillId: string,
+  input: unknown,
+): Promise<Result> {
+  const { profile } = await requireRole(["admin", "finance"]);
+  const parsed = creditNoteSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const admin = createAdminClient();
+  const { data: wb } = await admin
+    .from("waybills")
+    .select("currency")
+    .eq("id", waybillId)
+    .maybeSingle();
+  if (!wb) return { error: "Waybill not found." };
+
+  const { error } = await admin.from("credit_notes").insert({
+    waybill_id: waybillId,
+    amount: Number(parsed.data.amount),
+    currency: wb.currency ?? "SAR",
+    reason: parsed.data.reason ?? null,
+    created_by: profile.id,
+  });
+  if (error) return { error: error.message };
+
+  revalidatePath(`/waybills/${waybillId}`);
+  revalidatePath("/finance");
+  return {};
+}
+
+export async function voidCreditNote(
+  id: string,
+  waybillId: string,
+): Promise<Result> {
+  await requireRole(["admin", "finance"]);
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("credit_notes")
+    .update({ status: "void", voided_at: nowIso() })
+    .eq("id", id);
+  if (error) return { error: error.message };
+
+  revalidatePath(`/waybills/${waybillId}`);
+  revalidatePath("/finance");
   return {};
 }

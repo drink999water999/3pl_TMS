@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
-import { truckSchema, driverSchema, supplierSchema } from "@/lib/validation";
+import {
+  truckSchema,
+  driverSchema,
+  supplierSchema,
+  driverLoginSchema,
+} from "@/lib/validation";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 type Result = { error?: string };
 
@@ -117,5 +123,117 @@ export async function deleteSupplier(id: string): Promise<Result> {
     .eq("id", id);
   if (error) return { error: error.message };
   revalidatePath("/fleet");
+  return {};
+}
+
+
+// --- Driver login provisioning (the "driver gate") ----------------------------
+// Admin creates an app login for a driver and links it to the driver record, so
+// the driver can sign in and see only their own dispatches (/my-dispatches) and
+// progress them through to Delivered with proof of delivery.
+export async function createDriverLogin(
+  driverId: string,
+  input: unknown,
+): Promise<Result> {
+  await requireRole(["admin"]);
+  const parsed = driverLoginSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const { email, password } = parsed.data;
+
+  const admin = createAdminClient();
+
+  const { data: driver } = await admin
+    .from("drivers")
+    .select("id, name, user_id")
+    .eq("id", driverId)
+    .maybeSingle();
+  if (!driver) return { error: "Driver not found." };
+  if (driver.user_id)
+    return { error: "This driver already has a login." };
+
+  // Create the auth user (email pre-confirmed so they can sign in immediately).
+  const { data: created, error: cErr } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: driver.name },
+  });
+  if (cErr) return { error: cErr.message };
+  const userId = created.user.id;
+
+  // The signup trigger makes a pending client profile — promote it to driver.
+  // driver_id is the key link: current_driver_id() (used by every driver RLS
+  // policy) reads profiles.driver_id, so without it the driver sees nothing.
+  const { error: pErr } = await admin
+    .from("profiles")
+    .update({
+      full_name: driver.name,
+      role: "driver",
+      active: true,
+      driver_id: driverId,
+    })
+    .eq("id", userId);
+  if (pErr) return { error: pErr.message };
+
+  // Link the login to the driver record.
+  const { error: lErr } = await admin
+    .from("drivers")
+    .update({ user_id: userId })
+    .eq("id", driverId);
+  if (lErr) return { error: lErr.message };
+
+  revalidatePath("/fleet");
+  return {};
+}
+
+// Unlink a driver's login (revokes their access; keeps the driver record).
+export async function unlinkDriverLogin(driverId: string): Promise<Result> {
+  await requireRole(["admin"]);
+  const admin = createAdminClient();
+
+  const { data: driver } = await admin
+    .from("drivers")
+    .select("user_id")
+    .eq("id", driverId)
+    .maybeSingle();
+  if (!driver?.user_id) return { error: "No login linked to this driver." };
+
+  // Deactivate the profile + drop the driver link so the account can no longer
+  // sign in or resolve to a driver.
+  await admin
+    .from("profiles")
+    .update({ active: false, driver_id: null })
+    .eq("id", driver.user_id);
+
+  const { error } = await admin
+    .from("drivers")
+    .update({ user_id: null })
+    .eq("id", driverId);
+  if (error) return { error: error.message };
+
+  revalidatePath("/fleet");
+  return {};
+}
+
+// Reset a driver's login password.
+export async function resetDriverPassword(
+  driverId: string,
+  password: string,
+): Promise<Result> {
+  await requireRole(["admin"]);
+  if (!password || password.length < 8)
+    return { error: "Password must be at least 8 characters." };
+  const admin = createAdminClient();
+  const { data: driver } = await admin
+    .from("drivers")
+    .select("user_id")
+    .eq("id", driverId)
+    .maybeSingle();
+  if (!driver?.user_id) return { error: "No login linked to this driver." };
+  const { error } = await admin.auth.admin.updateUserById(driver.user_id, {
+    password,
+  });
+  if (error) return { error: error.message };
   return {};
 }

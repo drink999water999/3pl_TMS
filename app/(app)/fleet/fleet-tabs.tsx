@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, KeyRound, UserPlus, Unlink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,9 @@ import {
   deleteDriver,
   saveSupplier,
   deleteSupplier,
+  createDriverLogin,
+  unlinkDriverLogin,
+  resetDriverPassword,
 } from "./actions";
 
 type Truck = Tables<"trucks">;
@@ -29,6 +32,7 @@ type Driver = Tables<"drivers">;
 type Supplier = Tables<"suppliers">;
 type Lookup = { id: string; name: string };
 type SupplierType = { supplier_id: string; truck_type_id: string };
+export type DriverLogin = { email: string; active: boolean };
 
 type Tab = "trucks" | "drivers" | "suppliers";
 
@@ -41,6 +45,7 @@ export function FleetTabs({
   suppliers,
   truckTypes,
   supplierTypes,
+  driverLogins,
   canEdit,
 }: {
   trucks: Truck[];
@@ -48,12 +53,14 @@ export function FleetTabs({
   suppliers: Supplier[];
   truckTypes: Lookup[];
   supplierTypes: SupplierType[];
+  driverLogins: Record<string, DriverLogin>;
   canEdit: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("trucks");
   const [truck, setTruck] = useState<Truck | "new" | null>(null);
   const [driver, setDriver] = useState<Driver | "new" | null>(null);
   const [supplier, setSupplier] = useState<Supplier | "new" | null>(null);
+  const [loginFor, setLoginFor] = useState<Driver | null>(null);
   const router = useRouter();
 
   const typeName = (id: string | null) =>
@@ -161,12 +168,13 @@ export function FleetTabs({
               <TH>Phone</TH>
               <TH>License</TH>
               <TH>Status</TH>
+              <TH>App login</TH>
               <TH></TH>
             </TR>
           </THead>
           <TBody>
             {drivers.length === 0 ? (
-              <Empty cols={5} />
+              <Empty cols={6} />
             ) : (
               drivers.map((d) => (
                 <TR key={d.id}>
@@ -178,15 +186,46 @@ export function FleetTabs({
                       {d.status.replace("_", " ")}
                     </Badge>
                   </TD>
+                  <TD>
+                    {driverLogins[d.id] ? (
+                      <div className="flex flex-col">
+                        <span className="text-xs">{driverLogins[d.id].email}</span>
+                        <Badge
+                          variant={
+                            driverLogins[d.id].active ? "success" : "default"
+                          }
+                        >
+                          {driverLogins[d.id].active ? "Active" : "Disabled"}
+                        </Badge>
+                      </div>
+                    ) : d.user_id ? (
+                      <span className="text-xs text-muted-foreground">Linked</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">
+                        No login
+                      </span>
+                    )}
+                  </TD>
                   <TD className="text-right">
                     {canEdit ? (
-                      <Actions
-                        onEdit={() => setDriver(d)}
-                        onDelete={async () => {
-                          await deleteDriver(d.id);
-                          router.refresh();
-                        }}
-                      />
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => setLoginFor(d)}
+                          className="rounded p-1.5 text-muted-foreground hover:bg-muted"
+                          aria-label="Manage login"
+                          title="Manage app login"
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </button>
+                        <Actions
+                          onEdit={() => setDriver(d)}
+                          onDelete={async () => {
+                            await deleteDriver(d.id);
+                            router.refresh();
+                          }}
+                        />
+                      </div>
                     ) : null}
                   </TD>
                 </TR>
@@ -255,6 +294,13 @@ export function FleetTabs({
         <DriverDialog
           driver={driver === "new" ? undefined : driver}
           onClose={() => setDriver(null)}
+        />
+      ) : null}
+      {loginFor ? (
+        <DriverLoginDialog
+          driver={loginFor}
+          login={driverLogins[loginFor.id]}
+          onClose={() => setLoginFor(null)}
         />
       ) : null}
       {supplier ? (
@@ -630,5 +676,153 @@ function SupplierDialog({
         <input type="checkbox" {...register("is_active")} /> Active
       </label>
     </FormShell>
+  );
+}
+
+function DriverLoginDialog({
+  driver,
+  login,
+  onClose,
+}: {
+  driver: Driver;
+  login?: DriverLogin;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const linked = !!driver.user_id;
+  const [email, setEmail] = useState(login?.email ?? "");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+
+  const create = async () => {
+    setSaving(true);
+    setError(null);
+    const res = await createDriverLogin(driver.id, { email, password });
+    setSaving(false);
+    if (res.error) return setError(res.error);
+    onClose();
+    router.refresh();
+  };
+
+  const resetPw = async () => {
+    setSaving(true);
+    setError(null);
+    const res = await resetDriverPassword(driver.id, password);
+    setSaving(false);
+    if (res.error) return setError(res.error);
+    setDone("Password updated. Share it with the driver securely.");
+    setPassword("");
+  };
+
+  const unlink = async () => {
+    if (!confirm("Revoke this driver's login? They won't be able to sign in.")) return;
+    setSaving(true);
+    setError(null);
+    const res = await unlinkDriverLogin(driver.id);
+    setSaving(false);
+    if (res.error) return setError(res.error);
+    onClose();
+    router.refresh();
+  };
+
+  return (
+    <Dialog open onClose={onClose} title={`Driver login — ${driver.name}`}>
+      <div className="space-y-3">
+        {!linked ? (
+          <>
+            <p className="text-sm text-muted-foreground">
+              Create an app login so {driver.name} can sign in, see their assigned
+              deliveries, and complete them with proof of delivery.
+            </p>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="driver@example.com"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Temporary password</Label>
+              <Input
+                type="text"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="At least 8 characters"
+              />
+            </div>
+            {error ? (
+              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            <div className="flex justify-end gap-2 pt-1">
+              <Button type="button" variant="outline" onClick={onClose}>
+                Cancel
+              </Button>
+              <Button type="button" disabled={saving} onClick={create}>
+                <UserPlus className="h-4 w-4" />
+                {saving ? "Creating…" : "Create login"}
+              </Button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Signed-in email: </span>
+              <span className="font-medium">{login?.email ?? "linked"}</span>
+            </div>
+            {done ? (
+              <p className="rounded-md bg-green-100 px-3 py-2 text-sm text-green-800">
+                {done}
+              </p>
+            ) : (
+              <div className="space-y-1.5">
+                <Label>Reset password</Label>
+                <Input
+                  type="text"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="New password (min 8 characters)"
+                />
+              </div>
+            )}
+            {error ? (
+              <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {error}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-between pt-1">
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={saving}
+                onClick={unlink}
+                className="text-destructive"
+              >
+                <Unlink className="h-4 w-4" /> Revoke access
+              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={onClose}>
+                  Close
+                </Button>
+                {!done ? (
+                  <Button
+                    type="button"
+                    disabled={saving || !password}
+                    onClick={resetPw}
+                  >
+                    <KeyRound className="h-4 w-4" /> Set password
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </Dialog>
   );
 }

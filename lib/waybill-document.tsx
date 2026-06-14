@@ -124,6 +124,7 @@ export function waybillDocument({
             </Text>
             <Text style={styles.docMeta}>
               Status: {waybill.status === "approved" ? "Approved" : "Draft"}
+              {waybill.revision > 0 ? ` · Rev ${waybill.revision}` : ""}
             </Text>
           </View>
         </View>

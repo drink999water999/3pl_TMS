@@ -4,7 +4,15 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
-import { ArrowLeft, Plus, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Plus,
+  Pencil,
+  Trash2,
+  Truck,
+  MessageSquare,
+  Send,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,6 +32,8 @@ import {
   rejectRequest,
   cancelRequest,
   deleteRequest,
+  addComment,
+  deleteComment,
 } from "../actions";
 
 type Request = Tables<"transport_requests">;
@@ -37,10 +47,27 @@ type Loc = {
 };
 type TimelineEntry = {
   id: string;
+  entity: string;
   from_status: string | null;
   to_status: string;
   changed_at: string;
   by: string;
+};
+type DispatchInfo = {
+  id: string;
+  status: string;
+  assignmentType: string;
+  driver: string | null;
+  truck: string | null;
+  truckType: string | null;
+  supplier: string | null;
+  supplierTruck: string | null;
+} | null;
+type Comment = {
+  id: string;
+  body: string;
+  created_at: string;
+  author: string;
 };
 type Labels = {
   client: string;
@@ -61,6 +88,9 @@ export function RequestDetail({
   shipmentTypes,
   truckTypes,
   lockClientId,
+  dispatchInfo,
+  comments,
+  canComment,
 }: {
   request: Request;
   items: Item[];
@@ -72,6 +102,9 @@ export function RequestDetail({
   shipmentTypes: Lookup[];
   truckTypes: Lookup[];
   lockClientId?: string | null;
+  dispatchInfo?: DispatchInfo;
+  comments?: Comment[];
+  canComment?: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -204,6 +237,58 @@ export function RequestDetail({
         </p>
       ) : null}
 
+      {dispatchInfo ? (
+        <Card className="mb-5 space-y-3 p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Truck className="h-4 w-4 text-brand-navy" />
+              <h2 className="text-sm font-semibold text-brand-navy">
+                Assignment
+              </h2>
+              <Badge variant="navy">{dispatchInfo.status}</Badge>
+            </div>
+            <Link
+              href={`/dispatch/${dispatchInfo.id}`}
+              className="text-xs text-brand-navy hover:underline"
+            >
+              View dispatch
+            </Link>
+          </div>
+          <dl className="grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
+            <Detail
+              label="Type"
+              value={
+                dispatchInfo.assignmentType === "own"
+                  ? "Own fleet"
+                  : "Outsourced"
+              }
+            />
+            {dispatchInfo.assignmentType === "own" ? (
+              <>
+                <Detail label="Driver" value={dispatchInfo.driver ?? "—"} />
+                <Detail label="Truck" value={dispatchInfo.truck ?? "—"} />
+                <Detail
+                  label="Truck type"
+                  value={dispatchInfo.truckType ?? "—"}
+                />
+              </>
+            ) : (
+              <>
+                <Detail label="Supplier" value={dispatchInfo.supplier ?? "—"} />
+                <Detail
+                  label="Supplier truck"
+                  value={dispatchInfo.supplierTruck ?? "—"}
+                />
+                <Detail
+                  label="Truck type"
+                  value={dispatchInfo.truckType ?? "—"}
+                />
+              </>
+            )}
+          </dl>
+        </Card>
+      ) : null}
+
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="space-y-4 p-5 lg:col-span-2">
           <h2 className="text-sm font-semibold text-brand-navy">Details</h2>
@@ -244,17 +329,28 @@ export function RequestDetail({
           ) : null}
         </Card>
 
-        <Card className="space-y-3 p-5">
-          <h2 className="text-sm font-semibold text-brand-navy">History</h2>
+        <div className="space-y-5">
+          <Card className="space-y-3 p-5">
+            <h2 className="text-sm font-semibold text-brand-navy">History</h2>
           {timeline.length === 0 ? (
             <p className="text-sm text-muted-foreground">No history yet.</p>
           ) : (
             <ol className="space-y-3">
               {timeline.map((t) => (
                 <li key={t.id} className="flex gap-3 text-sm">
-                  <div className="mt-1 h-2 w-2 shrink-0 rounded-full bg-brand-blue" />
+                  <div
+                    className={
+                      "mt-1 h-2 w-2 shrink-0 rounded-full " +
+                      (t.entity === "dispatch" ? "bg-brand-orange" : "bg-brand-blue")
+                    }
+                  />
                   <div>
                     <p className="font-medium">
+                      {t.entity === "dispatch" ? (
+                        <span className="mr-1 rounded bg-brand-navy/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brand-navy">
+                          Dispatch
+                        </span>
+                      ) : null}
                       {t.from_status ? `${t.from_status} → ` : ""}
                       {t.to_status}
                     </p>
@@ -266,7 +362,15 @@ export function RequestDetail({
               ))}
             </ol>
           )}
-        </Card>
+          </Card>
+
+          {canComment ? (
+            <CommentsSection
+              requestId={request.id}
+              comments={comments ?? []}
+            />
+          ) : null}
+        </div>
       </div>
 
       <Card className="mt-5 space-y-3 p-5">
@@ -500,5 +604,97 @@ function RejectDialog({
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function CommentsSection({
+  requestId,
+  comments,
+}: {
+  requestId: string;
+  comments: Comment[];
+}) {
+  const router = useRouter();
+  const [body, setBody] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const add = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await addComment(requestId, body);
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    setBody("");
+    router.refresh();
+  };
+
+  const remove = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    const res = await deleteComment(requestId, id);
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    router.refresh();
+  };
+
+  return (
+    <Card className="space-y-3 p-5">
+      <div className="flex items-center gap-2">
+        <MessageSquare className="h-4 w-4 text-brand-navy" />
+        <h2 className="text-sm font-semibold text-brand-navy">Notes</h2>
+        <span className="text-xs text-muted-foreground">· internal</span>
+      </div>
+
+      <div className="space-y-2">
+        <Textarea
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Add a note for the team…"
+          rows={2}
+        />
+        <div className="flex justify-end">
+          <Button size="sm" disabled={busy || !body.trim()} onClick={add}>
+            <Send className="h-4 w-4" /> Add comment
+          </Button>
+        </div>
+      </div>
+
+      {error ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+
+      {comments.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No comments yet.</p>
+      ) : (
+        <ul className="divide-y">
+          {comments.map((c) => (
+            <li key={c.id} className="group flex gap-3 py-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand-navy/10 text-xs font-semibold text-brand-navy">
+                {(c.author || "?").slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="whitespace-pre-wrap text-sm">{c.body}</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  {c.author} · {formatDate(c.created_at)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm("Delete this comment?")) remove(c.id);
+                }}
+                className="rounded p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                aria-label="Delete comment"
+              >
+                <Trash2 className="h-4 w-4" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }

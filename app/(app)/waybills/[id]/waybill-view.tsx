@@ -10,12 +10,16 @@ import {
   Printer,
   Mail,
   RefreshCw,
+  Pencil,
+  Receipt,
+  Ban,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { formatDate, formatMoney } from "@/lib/format";
 import type { Tables } from "@/lib/database.types";
@@ -26,10 +30,22 @@ import {
   regenerateWaybillPdf,
   recalcWaybillPrice,
   setWaybillBilling,
+  amendWaybill,
+  issueCreditNote,
+  voidCreditNote,
 } from "../actions";
 
 type Waybill = Tables<"waybills">;
 type Item = Tables<"request_items">;
+type CreditNote = {
+  id: string;
+  credit_no: string;
+  amount: number;
+  currency: string | null;
+  reason: string | null;
+  status: string;
+  created_at: string;
+};
 type Billing = {
   freight_amount: number | null;
   carrier_cost: number | null;
@@ -47,6 +63,8 @@ export function WaybillView({
   canManage,
   canEmail,
   canSeeMargin,
+  canManageCredit,
+  creditNotes,
   billing,
   customerCharge,
   defaultEmail,
@@ -59,6 +77,8 @@ export function WaybillView({
   canManage: boolean;
   canEmail: boolean;
   canSeeMargin: boolean;
+  canManageCredit: boolean;
+  creditNotes: CreditNote[];
   billing: Billing;
   customerCharge: number | null;
   defaultEmail: string;
@@ -67,6 +87,7 @@ export function WaybillView({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [emailing, setEmailing] = useState(false);
+  const [amending, setAmending] = useState(false);
   const isApproved = waybill.status === "approved";
 
   const approve = async () => {
@@ -113,6 +134,9 @@ export function WaybillView({
           <Badge variant={isApproved ? "success" : "default"}>
             {isApproved ? "Approved" : "Draft"}
           </Badge>
+          {waybill.revision > 0 ? (
+            <Badge variant="warning">Rev {waybill.revision}</Badge>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2 print:hidden">
           {canManage && !isApproved ? (
@@ -139,6 +163,11 @@ export function WaybillView({
               title={hasPdf ? undefined : "Approve the waybill first"}
             >
               <Mail className="h-4 w-4" /> Email
+            </Button>
+          ) : null}
+          {canManage ? (
+            <Button variant="outline" onClick={() => setAmending(true)}>
+              <Pencil className="h-4 w-4" /> Amend
             </Button>
           ) : null}
           {canManage && isApproved ? (
@@ -282,11 +311,24 @@ export function WaybillView({
         />
       ) : null}
 
+      <CreditNotesSection
+        waybillId={waybill.id}
+        currency={waybill.currency ?? "SAR"}
+        notes={creditNotes}
+        canManage={canManageCredit}
+      />
+
       {emailing ? (
         <EmailDialog
           waybillId={waybill.id}
           defaultEmail={defaultEmail}
           onClose={() => setEmailing(false)}
+        />
+      ) : null}
+      {amending ? (
+        <AmendDialog
+          waybill={waybill}
+          onClose={() => setAmending(false)}
         />
       ) : null}
     </div>
@@ -520,5 +562,228 @@ function EmailDialog({
         </div>
       </div>
     </Dialog>
+  );
+}
+
+function AmendDialog({
+  waybill,
+  onClose,
+}: {
+  waybill: Waybill;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const [form, setForm] = useState({
+    client_name: waybill.client_name ?? "",
+    pickup_address: waybill.pickup_address ?? "",
+    delivery_address: waybill.delivery_address ?? "",
+    truck_number: waybill.truck_number ?? "",
+    truck_type_name: waybill.truck_type_name ?? "",
+    shipment_type_name: waybill.shipment_type_name ?? "",
+    driver_name: waybill.driver_name ?? "",
+    supplier_name: waybill.supplier_name ?? "",
+    quantity: waybill.quantity?.toString() ?? "",
+    pickup_date: waybill.pickup_date ?? "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const set = (k: keyof typeof form, v: string) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  const submit = async () => {
+    setSaving(true);
+    setError(null);
+    const res = await amendWaybill(waybill.id, form);
+    setSaving(false);
+    if (res.error) return setError(res.error);
+    onClose();
+    router.refresh();
+  };
+
+  const field = (label: string, k: keyof typeof form, type = "text") => (
+    <div className="space-y-1.5">
+      <Label>{label}</Label>
+      <Input
+        type={type}
+        value={form[k]}
+        onChange={(e) => set(k, e.target.value)}
+      />
+    </div>
+  );
+
+  return (
+    <Dialog open onClose={onClose} title={`Amend ${waybill.waybill_no}`}>
+      <div className="space-y-3">
+        <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
+          Corrects the waybill in place — the number stays the same, the revision
+          increases, and the PDF is regenerated.
+        </p>
+        {field("Client", "client_name")}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label>Pickup address</Label>
+            <Textarea
+              value={form.pickup_address}
+              onChange={(e) => set("pickup_address", e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Delivery address</Label>
+            <Textarea
+              value={form.delivery_address}
+              onChange={(e) => set("delivery_address", e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {field("Truck number", "truck_number")}
+          {field("Truck type", "truck_type_name")}
+          {field("Driver", "driver_name")}
+          {field("Supplier", "supplier_name")}
+          {field("Quantity", "quantity", "number")}
+          {field("Pickup date", "pickup_date", "date")}
+          {field("Shipment type", "shipment_type_name")}
+        </div>
+        {error ? (
+          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        ) : null}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="button" disabled={saving} onClick={submit}>
+            {saving ? "Saving…" : "Save & regenerate"}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function CreditNotesSection({
+  waybillId,
+  currency,
+  notes,
+  canManage,
+}: {
+  waybillId: string;
+  currency: string;
+  notes: CreditNote[];
+  canManage: boolean;
+}) {
+  const router = useRouter();
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!canManage && notes.length === 0) return null;
+
+  const issue = async () => {
+    setBusy(true);
+    setError(null);
+    const res = await issueCreditNote(waybillId, { amount, reason });
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    setAmount("");
+    setReason("");
+    router.refresh();
+  };
+
+  const voidNote = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    const res = await voidCreditNote(id, waybillId);
+    setBusy(false);
+    if (res.error) return setError(res.error);
+    router.refresh();
+  };
+
+  const money = (v: number) => formatMoney(v, currency);
+
+  return (
+    <Card className="mt-4 p-4 print:hidden">
+      <div className="mb-3 flex items-center gap-2">
+        <Receipt className="h-4 w-4 text-brand-navy" />
+        <h2 className="text-sm font-semibold text-brand-navy">Credit notes</h2>
+      </div>
+
+      {notes.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No credit notes issued.</p>
+      ) : (
+        <div className="divide-y">
+          {notes.map((n) => (
+            <div
+              key={n.id}
+              className="flex items-center justify-between gap-3 py-2 text-sm"
+            >
+              <div className="min-w-0">
+                <span className="font-medium">{n.credit_no}</span>
+                <span className="ml-2 font-semibold text-red-600">
+                  −{money(n.amount)}
+                </span>
+                {n.reason ? (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {n.reason}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-2">
+                {n.status === "void" ? (
+                  <Badge variant="default">Void</Badge>
+                ) : (
+                  <Badge variant="success">Issued</Badge>
+                )}
+                {canManage && n.status !== "void" ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => voidNote(n.id)}
+                    title="Void credit note"
+                  >
+                    <Ban className="h-4 w-4" />
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {canManage ? (
+        <div className="mt-4 grid gap-3 border-t pt-3 sm:grid-cols-[8rem,1fr,auto] sm:items-end">
+          <div className="space-y-1.5">
+            <Label>Amount ({currency})</Label>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Reason</Label>
+            <Input
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="e.g. overcharge, partial return"
+            />
+          </div>
+          <Button disabled={busy || !amount} onClick={issue}>
+            Issue credit
+          </Button>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+    </Card>
   );
 }
