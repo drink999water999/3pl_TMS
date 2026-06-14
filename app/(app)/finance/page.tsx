@@ -11,20 +11,29 @@ export default async function FinancePage() {
   await requireRole(["admin", "finance"]);
   const supabase = await createClient();
 
-  const [billingRes, waybillsRes, creditRes] = await Promise.all([
+  // Drive Finance from WAYBILLS (one per dispatched shipment) and left-join the
+  // internal billing row. This way every shipment shows up — unpriced ones as
+  // "Needs pricing" — instead of the page being blank when waybill_billing is
+  // empty (which happens if pricing never ran).
+  const [waybillsRes, billingRes, creditRes] = await Promise.all([
+    supabase
+      .from("waybills")
+      .select("id, waybill_no, client_name, issued_at, freight_amount, currency")
+      .order("issued_at", { ascending: false }),
     supabase
       .from("waybill_billing")
       .select(
         "waybill_id, freight_amount, carrier_cost, margin_amount, currency, payment_status, invoice_no",
       ),
-    supabase.from("waybills").select("id, waybill_no, client_name, issued_at"),
     supabase
       .from("credit_notes")
       .select("waybill_id, amount, status")
       .eq("status", "issued"),
   ]);
 
-  const wbById = new Map((waybillsRes.data ?? []).map((w) => [w.id, w]));
+  const billingByWb = new Map(
+    (billingRes.data ?? []).map((b) => [b.waybill_id, b]),
+  );
 
   // Sum issued credit notes per waybill (they net down revenue + margin).
   const creditByWb = new Map<string, number>();
@@ -35,21 +44,23 @@ export default async function FinancePage() {
     );
   }
 
-  const rows: FinanceRow[] = (billingRes.data ?? []).map((b) => {
-    const credit = creditByWb.get(b.waybill_id) ?? 0;
-    const priced = b.freight_amount != null && b.freight_amount > 0;
+  const rows: FinanceRow[] = (waybillsRes.data ?? []).map((w) => {
+    const b = billingByWb.get(w.id);
+    const credit = creditByWb.get(w.id) ?? 0;
+    const freight = b?.freight_amount ?? w.freight_amount;
+    const priced = freight != null && freight > 0;
     return {
-      waybill_id: b.waybill_id,
-      waybill_no: wbById.get(b.waybill_id)?.waybill_no ?? "—",
-      client_name: wbById.get(b.waybill_id)?.client_name ?? "—",
-      issued_at: wbById.get(b.waybill_id)?.issued_at ?? null,
-      freight_amount: b.freight_amount,
-      carrier_cost: b.carrier_cost,
-      margin_amount: b.margin_amount,
+      waybill_id: w.id,
+      waybill_no: w.waybill_no ?? "—",
+      client_name: w.client_name ?? "—",
+      issued_at: w.issued_at ?? null,
+      freight_amount: freight,
+      carrier_cost: b?.carrier_cost ?? null,
+      margin_amount: b?.margin_amount ?? null,
       credit_amount: credit,
-      currency: b.currency ?? "SAR",
-      payment_status: b.payment_status,
-      invoice_no: b.invoice_no,
+      currency: b?.currency ?? w.currency ?? "SAR",
+      payment_status: b?.payment_status ?? "unbilled",
+      invoice_no: b?.invoice_no ?? null,
       needs_pricing: !priced,
     };
   });
@@ -82,7 +93,7 @@ export default async function FinancePage() {
     <div>
       <PageHeader
         title="Finance"
-        description="Revenue, cost, and margin across completed shipments."
+        description="Revenue, cost, and margin across shipments."
       />
 
       <div className="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">

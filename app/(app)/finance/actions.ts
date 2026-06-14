@@ -17,14 +17,17 @@ export async function setPaymentStatus(
     return { error: "Invalid payment status." };
 
   const admin = createAdminClient();
-  const { error } = await admin
-    .from("waybill_billing")
-    .update({
+  // Upsert: a billing row may not exist yet for an unpriced waybill, so create
+  // one on first payment-status change instead of silently updating 0 rows.
+  const { error } = await admin.from("waybill_billing").upsert(
+    {
+      waybill_id: waybillId,
       payment_status: status,
       invoice_no: invoiceNo.trim() || null,
       paid_at: status === "paid" ? new Date().toISOString() : null,
-    })
-    .eq("waybill_id", waybillId);
+    },
+    { onConflict: "waybill_id" },
+  );
   if (error) return { error: error.message };
 
   revalidatePath("/finance");
