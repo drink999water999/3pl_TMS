@@ -22,6 +22,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate, formatMoney, requestStatusVariant } from "@/lib/format";
+import { computeSelling } from "@/lib/selling-price";
 import type { Tables } from "@/lib/database.types";
 import { RequestForm } from "../request-form";
 import {
@@ -44,6 +45,27 @@ type Loc = {
   client_id: string;
   kind: "pickup" | "delivery";
   name: string;
+  city_id: string | null;
+  receiver_name: string | null;
+  receiver_phone: string | null;
+};
+type ServiceType = { id: string; name: string; requires_quantity: boolean };
+type RouteRow = {
+  id: string;
+  from_city_id: string;
+  to_city_id: string;
+  distance_km: number | null;
+};
+type ContractRate = {
+  service_type_id: string | null;
+  route_id: string | null;
+  rate: number;
+  currency: string;
+};
+type DeliveryStop = {
+  location_id: string | null;
+  receiver_name: string | null;
+  receiver_phone: string | null;
 };
 type TimelineEntry = {
   id: string;
@@ -87,6 +109,16 @@ export function RequestDetail({
   locations,
   shipmentTypes,
   truckTypes,
+  serviceTypes = [],
+  cities = [],
+  routes = [],
+  contractRates = [],
+  standardRates = [],
+  deliveries = [],
+  multiLocationCharge = 0,
+  clientMultiCharge = {},
+  canSetPricing = false,
+  isClient = false,
   lockClientId,
   dispatchInfo,
   comments,
@@ -101,6 +133,16 @@ export function RequestDetail({
   locations: Loc[];
   shipmentTypes: Lookup[];
   truckTypes: Lookup[];
+  serviceTypes?: ServiceType[];
+  cities?: Lookup[];
+  routes?: RouteRow[];
+  contractRates?: ContractRate[];
+  standardRates?: ContractRate[];
+  deliveries?: DeliveryStop[];
+  multiLocationCharge?: number;
+  clientMultiCharge?: Record<string, number>;
+  canSetPricing?: boolean;
+  isClient?: boolean;
   lockClientId?: string | null;
   dispatchInfo?: DispatchInfo;
   comments?: Comment[];
@@ -114,6 +156,39 @@ export function RequestDetail({
   const [rejecting, setRejecting] = useState(false);
 
   const status = request.status;
+  const serviceTypeName =
+    serviceTypes.find((x) => x.id === request.service_type_id)?.name ?? null;
+  const cityNameById = new Map(cities.map((c) => [c.id, c.name]));
+  const locById = new Map(locations.map((l) => [l.id, l]));
+  const routeRow = routes.find((r) => r.id === request.route_id) ?? null;
+  const routeLabel = routeRow
+    ? `${cityNameById.get(routeRow.from_city_id) ?? "?"} → ${cityNameById.get(routeRow.to_city_id) ?? "?"}`
+    : null;
+  const sourceLabel =
+    request.request_source === "inhouse"
+      ? "In-house (on behalf of client)"
+      : request.request_source === "portal"
+        ? "Customer portal"
+        : null;
+  const mlc =
+    (request.client_id ? clientMultiCharge[request.client_id] : undefined) ??
+    multiLocationCharge ??
+    0;
+  const auto = computeSelling({
+    contractRates,
+    standardRates,
+    serviceTypeId: request.service_type_id,
+    routeId: request.route_id,
+    stops: deliveries.length || 1,
+    multiLocationCharge: mlc,
+    additional: request.additional_services_price ?? 0,
+  });
+  const sellingDisplay =
+    request.selling_price != null
+      ? { value: request.selling_price, auto: false }
+      : auto
+        ? { value: auto.total, auto: true }
+        : null;
   const isDraft = status === "Draft";
   const canCancel =
     status === "Draft" || status === "Submitted" || status === "Approved";
@@ -145,6 +220,16 @@ export function RequestDetail({
           locations={locations}
           shipmentTypes={shipmentTypes}
           truckTypes={truckTypes}
+          serviceTypes={serviceTypes}
+          cities={cities}
+          routes={routes}
+          contractRates={contractRates}
+          standardRates={standardRates}
+          deliveries={deliveries}
+          multiLocationCharge={multiLocationCharge}
+          clientMultiCharge={clientMultiCharge}
+          canSetPricing={canSetPricing}
+          isClient={isClient}
           lockClientId={lockClientId}
           onDone={() => setEditing(false)}
           onCancel={() => setEditing(false)}
@@ -299,6 +384,23 @@ export function RequestDetail({
             <Detail label="Delivery" value={labels.delivery} />
             <Detail label="Shipment type" value={labels.shipmentType} />
             <Detail label="Truck type" value={labels.truckType} />
+            {serviceTypeName ? (
+              <Detail label="Service type" value={serviceTypeName} />
+            ) : null}
+            {routeLabel ? (
+              <Detail label="Route" value={routeLabel} />
+            ) : null}
+            {sourceLabel ? (
+              <Detail label="Request source" value={sourceLabel} />
+            ) : null}
+            {sellingDisplay ? (
+              <Detail
+                label={
+                  sellingDisplay.auto ? "Selling price (auto)" : "Selling price"
+                }
+                value={formatMoney(sellingDisplay.value)}
+              />
+            ) : null}
             <Detail
               label="Quantity"
               value={request.quantity?.toString() ?? "—"}
@@ -317,6 +419,39 @@ export function RequestDetail({
               value={formatDate(request.delivery_date)}
             />
           </dl>
+          {deliveries.length > 1 ? (
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Delivery stops
+              </dt>
+              <dd className="mt-1 space-y-1 text-sm">
+                {deliveries.map((d, i) => {
+                  const loc = d.location_id ? locById.get(d.location_id) : null;
+                  const city = loc?.city_id
+                    ? cityNameById.get(loc.city_id)
+                    : null;
+                  return (
+                    <div key={i}>
+                      {i + 1}. {loc?.name ?? "—"}
+                      {city ? ` · ${city}` : ""}
+                      {d.receiver_name ? ` — ${d.receiver_name}` : ""}
+                      {d.receiver_phone ? ` (${d.receiver_phone})` : ""}
+                    </div>
+                  );
+                })}
+              </dd>
+            </div>
+          ) : null}
+          {request.additional_services ? (
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                Additional services
+              </dt>
+              <dd className="mt-1 whitespace-pre-wrap text-sm">
+                {request.additional_services}
+              </dd>
+            </div>
+          ) : null}
           {request.special_instructions ? (
             <div>
               <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">

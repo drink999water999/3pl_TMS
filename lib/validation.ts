@@ -30,6 +30,15 @@ export const clientSchema = z.object({
   billing_address: optionalText,
   notes: optionalText,
   is_active: z.boolean().default(true),
+  // Client classification + multi-location surcharge
+  client_type: z.preprocess(
+    emptyToNull,
+    z.enum(["Warehouse", "Transportation"]).nullable(),
+  ),
+  multi_location_charge: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? 0 : Number(v)),
+    z.number().min(0, "Charge can't be negative"),
+  ),
   // Pricing configuration
   pricing_mode: z.enum(["fixed", "per_km"]).default("fixed"),
   currency: z.string().min(1).default("SAR"),
@@ -62,12 +71,17 @@ export const locationSchema = z.object({
   maps_url: optionalText,
   lat: optionalNumber,
   lng: optionalNumber,
+  city_id: optionalUuid,
+  receiver_name: optionalText,
+  receiver_phone: optionalText,
 });
 export type LocationInput = z.input<typeof locationSchema>;
 
 export const contractRateSchema = z.object({
   delivery_location_id: optionalUuid,
   truck_type_id: optionalUuid,
+  service_type_id: optionalUuid,
+  route_id: optionalUuid,
   shipment_type_id: optionalUuid,
   rate: z.preprocess((v) => Number(v), z.number().positive("Rate must be > 0")),
   currency: z.string().min(1).default("SAR"),
@@ -81,6 +95,7 @@ export const truckSchema = z.object({
   code: z.string().min(1, "Code is required"),
   plate_number: z.string().min(1, "Plate number is required"),
   truck_type_id: optionalUuid,
+  current_city_id: optionalUuid,
   capacity: optionalNumber,
   capacity_unit: z.string().default("kg"),
   status: z.enum(["available", "busy", "maintenance"]).default("available"),
@@ -119,16 +134,33 @@ export const requestSchema = z.object({
   delivery_location_id: optionalUuid,
   shipment_type_id: optionalUuid,
   truck_type_id: optionalUuid,
+  service_type_id: optionalUuid,
+  route_id: optionalUuid,
   quantity: optionalNumber,
   weight: optionalNumber,
   pallets: optionalInt,
   distance_km: optionalNumber,
+  additional_services: optionalText,
+  additional_services_price: optionalNumber,
+  request_source: z.preprocess(
+    emptyToNull,
+    z.enum(["inhouse", "portal"]).nullable(),
+  ),
+  selling_price: optionalNumber,
   required_pickup_at: optionalText,
   delivery_date: optionalText,
   special_instructions: optionalText,
   po_reference: optionalText,
 });
 export type RequestInput = z.input<typeof requestSchema>;
+
+// One delivery stop in a multi-stop trip.
+export const deliveryStopSchema = z.object({
+  location_id: z.string().uuid("Select a delivery location"),
+  receiver_name: optionalText,
+  receiver_phone: optionalText,
+});
+export type DeliveryStopInput = z.input<typeof deliveryStopSchema>;
 
 export const requestItemSchema = z.object({
   item_name: z.string().min(1, "Item name is required"),
@@ -147,6 +179,9 @@ export const dispatchSchema = z
     driver_id: optionalUuid,
     supplier_id: optionalUuid,
     supplier_truck: optionalText,
+    supplier_truck_id: optionalUuid,
+    outsourced_driver_name: optionalText,
+    outsourced_driver_id: optionalText,
     truck_type_id: optionalUuid,
     carrier_cost: optionalNumber,
     customer_charge: optionalNumber,
@@ -253,3 +288,73 @@ export const driverLoginSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 export type DriverLoginInput = z.input<typeof driverLoginSchema>;
+
+// --- Master data: cities, routes, service types -------------------------------
+export const citySchema = z.object({
+  name: z.string().min(1, "City name is required"),
+  code: optionalText,
+  region: optionalText,
+  is_active: z.boolean().default(true),
+});
+export type CityInput = z.input<typeof citySchema>;
+
+export const routeSchema = z.object({
+  from_city_id: z.string().uuid("Select the origin city"),
+  to_city_id: z.string().uuid("Select the destination city"),
+  distance_km: optionalNumber,
+  is_active: z.boolean().default(true),
+});
+export type RouteInput = z.input<typeof routeSchema>;
+
+export const truckTypeSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  code: optionalText,
+  description: optionalText,
+  is_active: z.boolean().default(true),
+});
+export type TruckTypeInput = z.input<typeof truckTypeSchema>;
+
+export const serviceTypeSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  code: optionalText,
+  requires_quantity: z.boolean().default(false),
+  sort_order: z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? 0 : Math.trunc(Number(v))),
+    z.number().int(),
+  ),
+  is_active: z.boolean().default(true),
+});
+export type ServiceTypeInput = z.input<typeof serviceTypeSchema>;
+
+// --- Supplier trucks ----------------------------------------------------------
+export const supplierTruckSchema = z.object({
+  plate_number: z.string().min(1, "Plate number is required"),
+  driver_name: optionalText,
+  driver_id_no: optionalText,
+  driver_mobile: optionalText,
+  truck_type_id: optionalUuid,
+  service_type_id: optionalUuid,
+  is_active: z.boolean().default(true),
+});
+export type SupplierTruckInput = z.input<typeof supplierTruckSchema>;
+
+// --- Matrix cost (supplier rate by service type + route) ----------------------
+export const supplierRateSchema = z.object({
+  service_type_id: optionalUuid,
+  route_id: optionalUuid,
+  truck_type_id: optionalUuid,
+  lane: optionalText,
+  rate: z.preprocess((v) => Number(v), z.number().positive("Cost must be > 0")),
+  currency: z.string().min(1).default("SAR"),
+});
+export type SupplierRateInput = z.input<typeof supplierRateSchema>;
+
+// --- Standard rates (Rate Page) -----------------------------------------------
+export const standardRateSchema = z.object({
+  service_type_id: optionalUuid,
+  route_id: optionalUuid,
+  rate: z.preprocess((v) => Number(v), z.number().positive("Rate must be > 0")),
+  currency: z.string().min(1).default("SAR"),
+  is_active: z.boolean().default(true),
+});
+export type StandardRateInput = z.input<typeof standardRateSchema>;

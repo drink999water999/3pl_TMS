@@ -190,12 +190,13 @@ export async function setWaybillBilling(
   id: string,
   charge: string,
   cost: string,
+  reason?: string,
 ): Promise<Result> {
-  await requireRole(["admin", "finance"]);
+  const { profile } = await requireRole(["admin", "finance"]);
   const admin = createAdminClient();
   const { data: wb } = await admin
     .from("waybills")
-    .select("dispatch_id")
+    .select("dispatch_id, freight_amount, currency")
     .eq("id", id)
     .maybeSingle();
   if (!wb) return { error: "Waybill not found." };
@@ -207,9 +208,12 @@ export async function setWaybillBilling(
     return Number.isNaN(n) || n < 0 ? null : n;
   };
 
+  const oldAmount = wb.freight_amount;
+  const newCharge = toNum(charge);
+
   const { error } = await admin
     .from("dispatches")
-    .update({ customer_charge: toNum(charge), carrier_cost: toNum(cost) })
+    .update({ customer_charge: newCharge, carrier_cost: toNum(cost) })
     .eq("id", wb.dispatch_id);
   if (error) return { error: error.message };
 
@@ -218,6 +222,19 @@ export async function setWaybillBilling(
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Could not price waybill." };
   }
+
+  // Audit the customer-facing price change (original, new, user, date, reason).
+  if (newCharge != null && newCharge !== oldAmount) {
+    await admin.from("waybill_price_history").insert({
+      waybill_id: id,
+      original_amount: oldAmount,
+      new_amount: newCharge,
+      currency: wb.currency ?? "SAR",
+      reason: (reason ?? "").trim() || null,
+      changed_by: profile.id,
+    });
+  }
+
   revalidatePath(`/waybills/${id}`);
   return {};
 }

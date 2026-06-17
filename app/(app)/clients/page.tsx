@@ -6,6 +6,8 @@ import { SearchInput } from "@/components/app/search-input";
 import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { ClientsActions } from "./clients-table";
+import { ExcelTools } from "@/components/app/excel-tools";
+import { importClients } from "./actions";
 
 export const metadata = { title: "Clients" };
 
@@ -21,7 +23,9 @@ export default async function ClientsPage({
   const supabase = await createClient();
   let query = supabase
     .from("clients")
-    .select("id, name, code, phone, email, is_active")
+    .select(
+      "id, name, code, phone, email, tax_id, client_type, multi_location_charge, is_active",
+    )
     .is("deleted_at", null);
   if (q) query = query.or(`name.ilike.%${q}%,code.ilike.%${q}%`);
   const { data: clients } = await query.order("name");
@@ -35,8 +39,32 @@ export default async function ClientsPage({
         {canEdit ? <ClientsActions /> : null}
       </PageHeader>
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <SearchInput placeholder="Search by name or code…" />
+        {canEdit ? (
+          <ExcelTools
+            rows={(clients ?? []).map((c) => ({
+              name: c.name,
+              code: c.code,
+              phone: c.phone ?? "",
+              email: c.email ?? "",
+              tax_id: c.tax_id ?? "",
+              client_type: c.client_type ?? "",
+              multi_location_charge: c.multi_location_charge ?? 0,
+            }))}
+            filename="clients"
+            templateColumns={[
+              "name",
+              "code",
+              "phone",
+              "email",
+              "tax_id",
+              "client_type",
+              "multi_location_charge",
+            ]}
+            onImport={importClients}
+          />
+        ) : null}
       </div>
 
       <Table>

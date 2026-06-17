@@ -53,6 +53,15 @@ type Billing = {
   currency: string | null;
   basis: string | null;
 } | null;
+type PriceChange = {
+  id: string;
+  original_amount: number | null;
+  new_amount: number | null;
+  currency: string;
+  reason: string | null;
+  changed_at: string;
+  by: string;
+};
 
 export function WaybillView({
   waybill,
@@ -67,6 +76,8 @@ export function WaybillView({
   creditNotes,
   billing,
   customerCharge,
+  priceHistory,
+  canSeeInternal,
   defaultEmail,
 }: {
   waybill: Waybill;
@@ -81,6 +92,8 @@ export function WaybillView({
   creditNotes: CreditNote[];
   billing: Billing;
   customerCharge: number | null;
+  priceHistory: PriceChange[];
+  canSeeInternal: boolean;
   defaultEmail: string;
 }) {
   const router = useRouter();
@@ -218,7 +231,9 @@ export function WaybillView({
 
         <Section title="Address">
           <Grid>
-            <Field label="Client" value={waybill.client_name} />
+            <Field label="Sender" value={waybill.client_name} />
+            <Field label="Receiver" value={waybill.receiver_name} />
+            <Field label="PO / Reference" value={waybill.po_reference} />
           </Grid>
           <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <div>
@@ -236,6 +251,16 @@ export function WaybillView({
               <p className="mt-1 whitespace-pre-wrap text-sm">
                 {waybill.delivery_address || "—"}
               </p>
+              {waybill.delivery_maps_url ? (
+                <a
+                  href={waybill.delivery_maps_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-sm text-brand-blue hover:underline"
+                >
+                  Open location in Google Maps
+                </a>
+              ) : null}
             </div>
           </div>
         </Section>
@@ -281,7 +306,9 @@ export function WaybillView({
             <Field label="Truck number" value={waybill.truck_number} />
             <Field label="Truck type" value={waybill.truck_type_name} />
             <Field label="Driver" value={waybill.driver_name} />
-            <Field label="Supplier" value={waybill.supplier_name} />
+            {canSeeInternal ? (
+              <Field label="Supplier" value={waybill.supplier_name} />
+            ) : null}
           </Grid>
         </Section>
 
@@ -307,6 +334,7 @@ export function WaybillView({
           waybillId={waybill.id}
           billing={billing}
           customerCharge={customerCharge}
+          priceHistory={priceHistory}
           currency={waybill.currency ?? billing?.currency ?? "SAR"}
         />
       ) : null}
@@ -376,24 +404,28 @@ function BillingPanel({
   billing,
   currency,
   customerCharge,
+  priceHistory,
 }: {
   waybillId: string;
   billing: Billing;
   currency: string;
   customerCharge: number | null;
+  priceHistory: PriceChange[];
 }) {
   const router = useRouter();
   const [charge, setCharge] = useState(customerCharge?.toString() ?? "");
   const [cost, setCost] = useState(billing?.carrier_cost?.toString() ?? "");
+  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const saveCost = async () => {
     setBusy(true);
     setError(null);
-    const res = await setWaybillBilling(waybillId, charge, cost);
+    const res = await setWaybillBilling(waybillId, charge, cost, reason);
     setBusy(false);
     if (res.error) return setError(res.error);
+    setReason("");
     router.refresh();
   };
 
@@ -485,6 +517,14 @@ function BillingPanel({
           />
         </div>
       </div>
+      <div className="mt-3 space-y-1.5">
+        <Label>Reason for price change (optional)</Label>
+        <Input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="e.g. agreed discount, surcharge, correction"
+        />
+      </div>
       <div className="mt-2 flex justify-end">
         <Button disabled={busy} onClick={saveCost}>
           Save &amp; reprice
@@ -495,6 +535,32 @@ function BillingPanel({
         <p className="mt-2 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
+      ) : null}
+
+      {priceHistory.length > 0 ? (
+        <div className="mt-4 border-t pt-3">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Price change history
+          </p>
+          <ul className="space-y-1 text-sm">
+            {priceHistory.map((h) => (
+              <li key={h.id} className="flex flex-wrap gap-x-2">
+                <span className="text-muted-foreground">
+                  {formatDate(h.changed_at)} · {h.by}:
+                </span>
+                <span>
+                  {h.original_amount != null
+                    ? formatMoney(h.original_amount, h.currency)
+                    : "—"}{" "}
+                  → {h.new_amount != null ? formatMoney(h.new_amount, h.currency) : "—"}
+                </span>
+                {h.reason ? (
+                  <span className="text-muted-foreground">({h.reason})</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </div>
       ) : null}
     </Card>
   );

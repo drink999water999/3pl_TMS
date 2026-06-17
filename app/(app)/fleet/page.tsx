@@ -3,6 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { PageHeader } from "@/components/app/page-header";
 import { FleetTabs, type DriverLogin } from "./fleet-tabs";
+import { ExcelTools } from "@/components/app/excel-tools";
+import { importSuppliers } from "./actions";
 
 export const metadata = { title: "Fleet" };
 
@@ -11,7 +13,7 @@ export default async function FleetPage() {
   const canEdit = profile.role === "admin";
   const supabase = await createClient();
 
-  const [trucks, drivers, suppliers, truckTypes, supplierTypes] =
+  const [trucks, drivers, suppliers, truckTypes, supplierTypes, cities] =
     await Promise.all([
       supabase.from("trucks").select("*").is("deleted_at", null).order("code"),
       supabase.from("drivers").select("*").is("deleted_at", null).order("name"),
@@ -26,6 +28,11 @@ export default async function FleetPage() {
         .eq("is_active", true)
         .order("name"),
       supabase.from("supplier_truck_types").select("supplier_id, truck_type_id"),
+      supabase
+        .from("cities")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name"),
     ]);
 
   // Resolve linked logins (email + active) for drivers — admin only.
@@ -58,12 +65,32 @@ export default async function FleetPage() {
         title="Fleet"
         description="Trucks, drivers, and outsourced suppliers."
       />
+      {canEdit ? (
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-muted-foreground">
+            Import or export your suppliers in bulk.
+          </p>
+          <ExcelTools
+            rows={(suppliers.data ?? []).map((s) => ({
+              name: s.name,
+              code: s.code ?? "",
+              phone: s.phone ?? "",
+              email: s.email ?? "",
+              address: s.address ?? "",
+            }))}
+            filename="suppliers"
+            templateColumns={["name", "code", "phone", "email", "address"]}
+            onImport={importSuppliers}
+          />
+        </div>
+      ) : null}
       <FleetTabs
         trucks={trucks.data ?? []}
         drivers={drivers.data ?? []}
         suppliers={suppliers.data ?? []}
         truckTypes={truckTypes.data ?? []}
         supplierTypes={supplierTypes.data ?? []}
+        cities={cities.data ?? []}
         driverLogins={driverLogins}
         canEdit={canEdit}
       />

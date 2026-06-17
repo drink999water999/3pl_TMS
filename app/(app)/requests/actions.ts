@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
-import { requestSchema, requestItemSchema } from "@/lib/validation";
+import {
+  requestSchema,
+  requestItemSchema,
+  deliveryStopSchema,
+} from "@/lib/validation";
 
 type Result = { error?: string };
 
@@ -33,6 +37,7 @@ const nowIso = () => new Date().toISOString();
 export async function createRequest(
   input: unknown,
   items: unknown[],
+  deliveries: unknown[] = [],
 ): Promise<Result & { id?: string }> {
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success)
@@ -44,6 +49,14 @@ export async function createRequest(
     if (!r.success)
       return { error: r.error.issues[0]?.message ?? "Invalid item" };
     parsedItems.push(r.data);
+  }
+
+  const parsedStops = [];
+  for (const raw of deliveries ?? []) {
+    const r = deliveryStopSchema.safeParse(raw);
+    if (!r.success)
+      return { error: r.error.issues[0]?.message ?? "Invalid delivery stop" };
+    parsedStops.push(r.data);
   }
 
   const { supabase, uid, role, clientId } = await staffCtx();
@@ -80,6 +93,18 @@ export async function createRequest(
     if (itemsErr) return { error: itemsErr.message };
   }
 
+  if (parsedStops.length > 0) {
+    const stopRows = parsedStops.map((st, i) => ({
+      ...st,
+      request_id: data.id,
+      sequence: i + 1,
+    }));
+    const { error: stopErr } = await supabase
+      .from("request_deliveries")
+      .insert(stopRows);
+    if (stopErr) return { error: stopErr.message };
+  }
+
   revalidatePath("/requests");
   return { id: data.id };
 }
@@ -87,10 +112,19 @@ export async function createRequest(
 export async function updateRequest(
   id: string,
   input: unknown,
+  deliveries: unknown[] = [],
 ): Promise<Result> {
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success)
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+
+  const parsedStops = [];
+  for (const raw of deliveries ?? []) {
+    const r = deliveryStopSchema.safeParse(raw);
+    if (!r.success)
+      return { error: r.error.issues[0]?.message ?? "Invalid delivery stop" };
+    parsedStops.push(r.data);
+  }
 
   const { supabase, uid, role, clientId } = await staffCtx();
   const payload =
@@ -106,6 +140,20 @@ export async function updateRequest(
   if (error) return { error: error.message };
   if (!data || data.length === 0)
     return { error: "Only draft requests can be edited." };
+
+  // Replace the delivery stops (drafts only).
+  await supabase.from("request_deliveries").delete().eq("request_id", id);
+  if (parsedStops.length > 0) {
+    const stopRows = parsedStops.map((st, i) => ({
+      ...st,
+      request_id: id,
+      sequence: i + 1,
+    }));
+    const { error: stopErr } = await supabase
+      .from("request_deliveries")
+      .insert(stopRows);
+    if (stopErr) return { error: stopErr.message };
+  }
 
   revalidatePath("/requests");
   revalidatePath(`/requests/${id}`);

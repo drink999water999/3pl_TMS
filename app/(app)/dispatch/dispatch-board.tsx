@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Truck as TruckIcon } from "lucide-react";
@@ -24,6 +24,9 @@ type Awaiting = {
   route: string;
   truckType: string;
   deliveryDate: string | null;
+  routeId: string | null;
+  serviceTypeId: string | null;
+  sellingPrice: number | null;
 };
 type BoardItem = {
   id: string;
@@ -32,6 +35,7 @@ type BoardItem = {
   status: string;
   hasIssue: boolean;
   who: string;
+  route: string;
 };
 type Truck = {
   id: string;
@@ -42,6 +46,21 @@ type Truck = {
 };
 type Lookup = { id: string; name: string };
 type SupplierType = { supplier_id: string; truck_type_id: string };
+type SupplierTruck = {
+  id: string;
+  supplier_id: string;
+  plate_number: string;
+  driver_name: string | null;
+  driver_id_no: string | null;
+  driver_mobile: string | null;
+  truck_type_id: string | null;
+};
+type SupplierRate = {
+  supplier_id: string;
+  route_id: string | null;
+  service_type_id: string | null;
+  rate: number;
+};
 
 export function DispatchBoard({
   awaiting,
@@ -51,6 +70,8 @@ export function DispatchBoard({
   suppliers,
   truckTypes,
   supplierTypes,
+  supplierTrucks,
+  supplierRates,
 }: {
   awaiting: Awaiting[];
   dispatches: BoardItem[];
@@ -59,8 +80,29 @@ export function DispatchBoard({
   suppliers: Lookup[];
   truckTypes: Lookup[];
   supplierTypes: SupplierType[];
+  supplierTrucks: SupplierTruck[];
+  supplierRates: SupplierRate[];
 }) {
   const [target, setTarget] = useState<Awaiting | null>(null);
+  const [dispQuery, setDispQuery] = useState("");
+  const [dispStatus, setDispStatus] = useState("");
+
+  const filteredDispatches = dispatches.filter((d) => {
+    if (dispStatus && d.status !== dispStatus) return false;
+    const q = dispQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [d.request_no, d.client, d.who, d.route, d.status].some((v) =>
+      String(v ?? "").toLowerCase().includes(q),
+    );
+  });
+  const DISPATCH_STATUSES = [
+    "Assigned",
+    "Dispatched",
+    "Picked Up",
+    "In Transit",
+    "Delivered",
+    "Confirmed",
+  ];
 
   return (
     <div className="space-y-6">
@@ -112,12 +154,34 @@ export function DispatchBoard({
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold text-brand-navy">
-          Dispatches
-          <span className="ml-2 text-xs text-muted-foreground">
-            {dispatches.length}
-          </span>
-        </h2>
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-sm font-semibold text-brand-navy">
+            Dispatches
+            <span className="ml-2 text-xs text-muted-foreground">
+              {filteredDispatches.length}
+            </span>
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              value={dispQuery}
+              onChange={(e) => setDispQuery(e.target.value)}
+              placeholder="Search truck, driver, client, destination, request…"
+              className="sm:w-72"
+            />
+            <Select
+              value={dispStatus}
+              onChange={(e) => setDispStatus(e.target.value)}
+              className="sm:w-40"
+            >
+              <option value="">All statuses</option>
+              {DISPATCH_STATUSES.map((st) => (
+                <option key={st} value={st}>
+                  {st}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
         <Card className="p-0">
           <Table>
             <THead>
@@ -129,14 +193,14 @@ export function DispatchBoard({
               </TR>
             </THead>
             <TBody>
-              {dispatches.length === 0 ? (
+              {filteredDispatches.length === 0 ? (
                 <TR>
                   <TD colSpan={4} className="text-center text-muted-foreground">
-                    Nothing in transit.
+                    No matching dispatches.
                   </TD>
                 </TR>
               ) : (
-                dispatches.map((d) => (
+                filteredDispatches.map((d) => (
                   <TR key={d.id}>
                     <TD>
                       <Link
@@ -174,6 +238,8 @@ export function DispatchBoard({
           suppliers={suppliers}
           truckTypes={truckTypes}
           supplierTypes={supplierTypes}
+          supplierTrucks={supplierTrucks}
+          supplierRates={supplierRates}
           onClose={() => setTarget(null)}
         />
       ) : null}
@@ -188,6 +254,8 @@ function DispatchDialog({
   suppliers,
   truckTypes,
   supplierTypes,
+  supplierTrucks,
+  supplierRates,
   onClose,
 }: {
   request: Awaiting;
@@ -196,6 +264,8 @@ function DispatchDialog({
   suppliers: Lookup[];
   truckTypes: Lookup[];
   supplierTypes: SupplierType[];
+  supplierTrucks: SupplierTruck[];
+  supplierRates: SupplierRate[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -203,15 +273,24 @@ function DispatchDialog({
   const [truckId, setTruckId] = useState<string | null>(null);
   const [driverId, setDriverId] = useState<string | null>(null);
   const [supplierId, setSupplierId] = useState<string | null>(null);
-  const [supplierTruck, setSupplierTruck] = useState("");
+  const [supplierTruckId, setSupplierTruckId] = useState("");
+  const [supplierPlate, setSupplierPlate] = useState("");
+  const [outDriverName, setOutDriverName] = useState("");
+  const [outDriverId, setOutDriverId] = useState("");
   const [truckTypeId, setTruckTypeId] = useState("");
   const [carrierCost, setCarrierCost] = useState("");
-  const [customerCharge, setCustomerCharge] = useState("");
+  const [customerCharge, setCustomerCharge] = useState(
+    request.sellingPrice != null ? request.sellingPrice.toString() : "",
+  );
   const [notes, setNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const selectedTruck = trucks.find((t) => t.id === truckId);
+  const supplierPlates = useMemo(
+    () => supplierTrucks.filter((t) => t.supplier_id === supplierId),
+    [supplierTrucks, supplierId],
+  );
 
   const onTruckChange = (id: string | null) => {
     setTruckId(id);
@@ -219,9 +298,42 @@ function DispatchDialog({
     if (t?.default_driver_id && !driverId) setDriverId(t.default_driver_id);
   };
 
+  // Best-match supplier cost for this request's route / service type.
+  const matchCarrierCost = (sid: string) => {
+    const rates = supplierRates.filter((r) => r.supplier_id === sid);
+    const exact = rates.find(
+      (r) =>
+        r.route_id === request.routeId &&
+        r.service_type_id === request.serviceTypeId,
+    );
+    const byRoute = rates.find((r) => r.route_id === request.routeId);
+    const bySvc = rates.find(
+      (r) => r.service_type_id === request.serviceTypeId,
+    );
+    return exact ?? byRoute ?? bySvc ?? null;
+  };
+
   const onSupplierChange = (id: string | null) => {
     setSupplierId(id);
+    setSupplierTruckId("");
+    setSupplierPlate("");
+    setOutDriverName("");
+    setOutDriverId("");
     setTruckTypeId("");
+    const match = id ? matchCarrierCost(id) : null;
+    setCarrierCost(match ? match.rate.toString() : "");
+  };
+
+  // Selecting a plate auto-fills driver + truck type (all editable).
+  const onPlateChange = (stId: string) => {
+    setSupplierTruckId(stId);
+    const t = supplierPlates.find((x) => x.id === stId);
+    if (t) {
+      setSupplierPlate(t.plate_number);
+      setOutDriverName(t.driver_name ?? "");
+      setOutDriverId(t.driver_id_no ?? "");
+      setTruckTypeId(t.truck_type_id ?? "");
+    }
   };
 
   // Constrain outsourced truck types to what the supplier offers (if any).
@@ -244,9 +356,14 @@ function DispatchDialog({
       truck_id: assignment === "own" ? truckId : null,
       driver_id: assignment === "own" ? driverId : null,
       supplier_id: assignment === "outsourced" ? supplierId : null,
-      supplier_truck: assignment === "outsourced" ? supplierTruck : null,
+      supplier_truck: assignment === "outsourced" ? supplierPlate : null,
+      supplier_truck_id:
+        assignment === "outsourced" ? supplierTruckId || null : null,
+      outsourced_driver_name:
+        assignment === "outsourced" ? outDriverName : null,
+      outsourced_driver_id: assignment === "outsourced" ? outDriverId : null,
       truck_type_id: assignment === "outsourced" ? truckTypeId : null,
-      carrier_cost: carrierCost,
+      carrier_cost: assignment === "outsourced" ? carrierCost : "",
       customer_charge: customerCharge,
       notes,
     });
@@ -322,48 +439,77 @@ function DispatchDialog({
                 placeholder="Select a supplier…"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label>Truck plate</Label>
+              <Select
+                value={supplierTruckId}
+                onChange={(e) => onPlateChange(e.target.value)}
+                disabled={!supplierId}
+              >
+                <option value="">
+                  {supplierId
+                    ? supplierPlates.length > 0
+                      ? "— Select a plate —"
+                      : "No trucks on file for this supplier"
+                    : "Pick a supplier first"}
+                </option>
+                {supplierPlates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.plate_number}
+                    {t.driver_name ? ` · ${t.driver_name}` : ""}
+                  </option>
+                ))}
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Truck type</Label>
-                <Select
-                  value={truckTypeId}
-                  onChange={(e) => setTruckTypeId(e.target.value)}
-                >
-                  <option value="">— Select —</option>
-                  {typeOptions.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </Select>
+                <Label>Driver name</Label>
+                <Input
+                  value={outDriverName}
+                  onChange={(e) => setOutDriverName(e.target.value)}
+                  placeholder="Driver name"
+                />
               </div>
               <div className="space-y-1.5">
-                <Label>Supplier truck / plate</Label>
+                <Label>Driver ID</Label>
                 <Input
-                  value={supplierTruck}
-                  onChange={(e) => setSupplierTruck(e.target.value)}
-                  placeholder="Optional"
+                  value={outDriverId}
+                  onChange={(e) => setOutDriverId(e.target.value)}
+                  placeholder="Driver ID"
                 />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Truck type</Label>
+              <Select
+                value={truckTypeId}
+                onChange={(e) => setTruckTypeId(e.target.value)}
+              >
+                <option value="">— Select —</option>
+                {typeOptions.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Carrier cost</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={carrierCost}
+                onChange={(e) => setCarrierCost(e.target.value)}
+                placeholder="Auto-filled from the supplier rate (editable)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Auto-filled from the supplier&apos;s cost list for this route /
+                service. You can override it.
+              </p>
+            </div>
           </>
         )}
-
-        <div className="space-y-1.5">
-          <Label>Carrier cost</Label>
-          <Input
-            type="number"
-            step="0.01"
-            min="0"
-            value={carrierCost}
-            onChange={(e) => setCarrierCost(e.target.value)}
-            placeholder="What you pay the carrier (optional)"
-          />
-          <p className="text-xs text-muted-foreground">
-            Used to compute margin. Leave blank to use the client&apos;s markup
-            rule. Admin/finance can also set this later on the waybill.
-          </p>
-        </div>
 
         <div className="space-y-1.5">
           <Label>Customer charge</Label>
@@ -373,11 +519,11 @@ function DispatchDialog({
             min="0"
             value={customerCharge}
             onChange={(e) => setCustomerCharge(e.target.value)}
-            placeholder="Override the client's pricing (optional)"
+            placeholder="Auto-filled from the request (editable)"
           />
           <p className="text-xs text-muted-foreground">
-            What the customer is billed. Leave blank to auto-price from the
-            client&apos;s rate (fixed or per-km).
+            What the customer is billed for this trip. Pre-filled from the
+            request&apos;s selling price; overriding here affects only this trip.
           </p>
         </div>
 

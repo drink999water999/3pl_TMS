@@ -13,6 +13,7 @@ export default async function RequestDetailPage({
   const { profile } = await requireRole(["admin", "operations", "client"]);
   const isAdmin = profile.role === "admin";
   const isStaff = profile.role === "admin" || profile.role === "operations";
+  const isClient = profile.role === "client";
   const supabase = await createClient();
 
   const { data: request } = await supabase
@@ -31,6 +32,13 @@ export default async function RequestDetailPage({
     truckTypes,
     people,
     dispatchRes,
+    serviceTypes,
+    cities,
+    routes,
+    deliveriesRes,
+    clientRow,
+    contractRatesRes,
+    standardRatesRes,
   ] = await Promise.all([
     supabase
       .from("request_items")
@@ -51,7 +59,9 @@ export default async function RequestDetailPage({
       .order("name"),
     supabase
       .from("locations")
-      .select("id, client_id, kind, name")
+      .select(
+        "id, client_id, kind, name, city_id, receiver_name, receiver_phone",
+      )
       .is("deleted_at", null)
       .order("name"),
     supabase
@@ -72,7 +82,42 @@ export default async function RequestDetailPage({
       )
       .eq("request_id", params.id)
       .maybeSingle(),
+    supabase
+      .from("service_types")
+      .select("id, name, requires_quantity")
+      .eq("is_active", true)
+      .order("sort_order"),
+    supabase.from("cities").select("id, name").eq("is_active", true).order("name"),
+    supabase
+      .from("routes")
+      .select("id, from_city_id, to_city_id, distance_km")
+      .eq("is_active", true)
+      .is("deleted_at", null),
+    supabase
+      .from("request_deliveries")
+      .select("location_id, receiver_name, receiver_phone, sequence")
+      .eq("request_id", params.id)
+      .order("sequence"),
+    supabase
+      .from("clients")
+      .select("multi_location_charge")
+      .eq("id", request.client_id)
+      .maybeSingle(),
+    supabase
+      .from("contract_rates")
+      .select("service_type_id, route_id, rate, currency")
+      .eq("client_id", request.client_id)
+      .is("deleted_at", null),
+    supabase
+      .from("standard_rates")
+      .select("service_type_id, route_id, rate, currency")
+      .eq("is_active", true)
+      .is("deleted_at", null),
   ]);
+  const clientMultiCharge: Record<string, number> = {};
+  if (request.client_id)
+    clientMultiCharge[request.client_id] =
+      clientRow.data?.multi_location_charge ?? 0;
 
   const allLocations = locations.data ?? [];
   const personName = (id: string | null) =>
@@ -198,6 +243,16 @@ export default async function RequestDetailPage({
       locations={allLocations}
       shipmentTypes={shipmentTypes.data ?? []}
       truckTypes={truckTypes.data ?? []}
+      serviceTypes={serviceTypes.data ?? []}
+      cities={cities.data ?? []}
+      routes={routes.data ?? []}
+      contractRates={contractRatesRes.data ?? []}
+      standardRates={standardRatesRes.data ?? []}
+      deliveries={deliveriesRes.data ?? []}
+      multiLocationCharge={clientRow.data?.multi_location_charge ?? 0}
+      clientMultiCharge={clientMultiCharge}
+      canSetPricing={!isClient}
+      isClient={isClient}
       lockClientId={lockClientId}
       dispatchInfo={dispatchInfo}
       comments={comments}

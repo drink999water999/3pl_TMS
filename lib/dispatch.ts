@@ -8,6 +8,7 @@ export const DISPATCH_FLOW = [
   "Picked Up",
   "In Transit",
   "Delivered",
+  "Confirmed",
 ] as const;
 
 export type DispatchStatus = (typeof DISPATCH_FLOW)[number];

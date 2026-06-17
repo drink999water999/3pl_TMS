@@ -22,6 +22,7 @@ export default async function WaybillDetailPage({
   const canEmail = canManage || profile.role === "client";
   const canSeeMargin = profile.role === "admin" || profile.role === "finance";
   const canManageCredit = canSeeMargin; // admin + finance issue/void credit notes
+  const canSeeInternal = profile.role !== "client";
   const supabase = await createClient();
 
   const { data: waybill } = await supabase
@@ -103,6 +104,43 @@ export default async function WaybillDetailPage({
     customerCharge = disp?.customer_charge ?? null;
   }
 
+  // Price-change audit trail (admin/finance).
+  let priceHistory: {
+    id: string;
+    original_amount: number | null;
+    new_amount: number | null;
+    currency: string;
+    reason: string | null;
+    changed_at: string;
+    by: string;
+  }[] = [];
+  if (canSeeMargin) {
+    const { data: ph } = await supabase
+      .from("waybill_price_history")
+      .select("id, original_amount, new_amount, currency, reason, changed_at, changed_by")
+      .eq("waybill_id", params.id)
+      .order("changed_at", { ascending: false });
+    if (ph && ph.length > 0) {
+      const ids = Array.from(
+        new Set(ph.map((r) => r.changed_by).filter(Boolean) as string[]),
+      );
+      const { data: profs } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"]);
+      const nameById = new Map((profs ?? []).map((p) => [p.id, p.full_name]));
+      priceHistory = ph.map((r) => ({
+        id: r.id,
+        original_amount: r.original_amount,
+        new_amount: r.new_amount,
+        currency: r.currency,
+        reason: r.reason,
+        changed_at: r.changed_at,
+        by: r.changed_by ? nameById.get(r.changed_by) ?? "—" : "—",
+      }));
+    }
+  }
+
   // Credit notes raised against this waybill (RLS scopes visibility).
   const { data: creditNotes } = await supabase
     .from("credit_notes")
@@ -124,6 +162,8 @@ export default async function WaybillDetailPage({
       creditNotes={creditNotes ?? []}
       billing={billing}
       customerCharge={customerCharge}
+      priceHistory={priceHistory}
+      canSeeInternal={canSeeInternal}
       defaultEmail={defaultEmail}
     />
   );

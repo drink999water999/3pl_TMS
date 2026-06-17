@@ -2,3 +2,6 @@
 export const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME ?? "3PL TMS";
 export const APP_TAGLINE = "Efficient Transport";
 export const LOGO_PATH = "/logo.png";
+
+export const CLIENT_TYPES = ["Warehouse", "Transportation"] as const;
+export type ClientType = (typeof CLIENT_TYPES)[number];

@@ -9,32 +9,73 @@ export const metadata = { title: "New request" };
 
 export default async function NewRequestPage() {
   const { profile } = await requireRole(["admin", "operations", "client"]);
-  const lockClientId = profile.role === "client" ? profile.client_id : null;
+  const isClient = profile.role === "client";
+  const lockClientId = isClient ? profile.client_id : null;
   const supabase = await createClient();
 
-  const [clients, locations, shipmentTypes, truckTypes] = await Promise.all([
-    supabase
-      .from("clients")
-      .select("id, name")
-      .is("deleted_at", null)
-      .eq("is_active", true)
-      .order("name"),
-    supabase
-      .from("locations")
-      .select("id, client_id, kind, name")
-      .is("deleted_at", null)
-      .order("name"),
-    supabase
-      .from("shipment_types")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("name"),
-    supabase
-      .from("truck_types")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("name"),
-  ]);
+  const [
+    clients,
+    locations,
+    shipmentTypes,
+    truckTypes,
+    serviceTypes,
+    cities,
+    routes,
+    contractRates,
+    standardRates,
+  ] = await Promise.all([
+      supabase
+        .from("clients")
+        .select("id, name, multi_location_charge")
+        .is("deleted_at", null)
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("locations")
+        .select(
+          "id, client_id, kind, name, city_id, receiver_name, receiver_phone",
+        )
+        .is("deleted_at", null)
+        .order("name"),
+      supabase
+        .from("shipment_types")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("truck_types")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("service_types")
+        .select("id, name, requires_quantity")
+        .eq("is_active", true)
+        .order("sort_order"),
+      supabase
+        .from("cities")
+        .select("id, name")
+        .eq("is_active", true)
+        .order("name"),
+      supabase
+        .from("routes")
+        .select("id, from_city_id, to_city_id, distance_km")
+        .eq("is_active", true)
+        .is("deleted_at", null),
+      supabase
+        .from("contract_rates")
+        .select("client_id, service_type_id, route_id, rate, currency")
+        .is("deleted_at", null),
+      supabase
+        .from("standard_rates")
+        .select("service_type_id, route_id, rate, currency")
+        .eq("is_active", true)
+        .is("deleted_at", null),
+    ]);
+
+  const clientMultiCharge: Record<string, number> = {};
+  for (const c of clients.data ?? [])
+    clientMultiCharge[c.id] = c.multi_location_charge ?? 0;
 
   return (
     <div>
@@ -54,6 +95,14 @@ export default async function NewRequestPage() {
         locations={locations.data ?? []}
         shipmentTypes={shipmentTypes.data ?? []}
         truckTypes={truckTypes.data ?? []}
+        serviceTypes={serviceTypes.data ?? []}
+        cities={cities.data ?? []}
+        routes={routes.data ?? []}
+        contractRates={contractRates.data ?? []}
+        standardRates={standardRates.data ?? []}
+        clientMultiCharge={clientMultiCharge}
+        canSetPricing={!isClient}
+        isClient={isClient}
         lockClientId={lockClientId}
       />
     </div>

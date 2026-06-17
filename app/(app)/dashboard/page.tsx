@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { RealtimeRefresh } from "@/components/app/realtime-refresh";
 import { DashboardFilters } from "./dashboard-filters";
 import { DashboardView } from "./dashboard-view";
+import { AreaOps } from "./dashboard-area";
 import { ClientDashboard } from "./client-dashboard";
 
 export const metadata = { title: "Dashboard" };
@@ -51,32 +52,45 @@ export default async function DashboardPage({
       : null;
 
   const supabase = await createClient();
-  const [requestsRes, dispatchesRes, exceptionsRes, trucksRes, clientsRes] =
-    await Promise.all([
-      supabase
-        .from("transport_requests")
-        .select("id, status, client_id, created_at"),
-      supabase
-        .from("dispatches")
-        .select(
-          "id, status, assignment_type, has_issue, created_at, delivered_at, request_id",
-        ),
-      supabase
-        .from("exceptions")
-        .select("id, kind, created_at, request_id"),
-      supabase.from("trucks").select("id, status, is_active, deleted_at"),
-      supabase
-        .from("clients")
-        .select("id, name")
-        .is("deleted_at", null)
-        .order("name"),
-    ]);
+  const [
+    requestsRes,
+    dispatchesRes,
+    exceptionsRes,
+    trucksRes,
+    clientsRes,
+    locationsRes,
+    citiesRes,
+  ] = await Promise.all([
+    supabase
+      .from("transport_requests")
+      .select("id, status, client_id, created_at, delivery_location_id"),
+    supabase
+      .from("dispatches")
+      .select(
+        "id, status, assignment_type, has_issue, created_at, delivered_at, picked_up_at, request_id",
+      ),
+    supabase
+      .from("exceptions")
+      .select("id, kind, created_at, request_id"),
+    supabase
+      .from("trucks")
+      .select("id, status, is_active, deleted_at, current_city_id"),
+    supabase
+      .from("clients")
+      .select("id, name")
+      .is("deleted_at", null)
+      .order("name"),
+    supabase.from("locations").select("id, city_id"),
+    supabase.from("cities").select("id, name").eq("is_active", true).order("name"),
+  ]);
 
   const requests = requestsRes.data ?? [];
   const dispatches = dispatchesRes.data ?? [];
   const exceptions = exceptionsRes.data ?? [];
   const trucks = trucksRes.data ?? [];
   const clients = clientsRes.data ?? [];
+  const locations = locationsRes.data ?? [];
+  const cities = citiesRes.data ?? [];
 
   const clientOfRequest = new Map(
     requests.map((r) => [r.id, r.client_id] as const),
@@ -188,6 +202,45 @@ export default async function DashboardPage({
     ).length,
   }));
 
+  // --- Area operations (per-city) ---------------------------------------------
+  const cityNameById = new Map(cities.map((c) => [c.id, c.name]));
+  const locCity = new Map(locations.map((l) => [l.id, l.city_id] as const));
+  const reqDeliveryCity = new Map(
+    requests.map((r) => [r.id, r.delivery_location_id ? locCity.get(r.delivery_location_id) ?? null : null] as const),
+  );
+  type AreaRow = {
+    city: string;
+    inTransit: number;
+    pickedUp: number;
+    delivered: number;
+    freeTrucks: number;
+  };
+  const areaMap = new Map<string, AreaRow>();
+  const ensureArea = (cityId: string | null) => {
+    const key = cityId ?? "none";
+    const name = cityId ? cityNameById.get(cityId) ?? "Unknown" : "Unassigned";
+    if (!areaMap.has(key))
+      areaMap.set(key, { city: name, inTransit: 0, pickedUp: 0, delivered: 0, freeTrucks: 0 });
+    return areaMap.get(key)!;
+  };
+  for (const d of dispatches) {
+    if (!dispMatch(d.request_id)) continue;
+    const cityId = reqDeliveryCity.get(d.request_id) ?? null;
+    const a = ensureArea(cityId);
+    if (d.status === "In Transit") a.inTransit++;
+    if (d.picked_up_at) a.pickedUp++;
+    if (d.status === "Delivered" || d.status === "Confirmed") a.delivered++;
+  }
+  // Available (free) trucks per base city + maintenance count.
+  let maintenanceCount = 0;
+  for (const t of activeTrucks) {
+    if (t.status === "maintenance") maintenanceCount++;
+    if (t.status === "available") ensureArea(t.current_city_id ?? null).freeTrucks++;
+  }
+  const areaRows = Array.from(areaMap.values())
+    .filter((a) => a.inTransit || a.pickedUp || a.delivered || a.freeTrucks)
+    .sort((a, b) => a.city.localeCompare(b.city));
+
   return (
     <div>
       <RealtimeRefresh table="dispatches" />
@@ -218,6 +271,7 @@ export default async function DashboardPage({
         topClients={topClients}
         exceptions={exceptionData}
       />
+      <AreaOps rows={areaRows} maintenanceCount={maintenanceCount} />
     </div>
   );
 }

@@ -169,3 +169,93 @@ export async function deleteRate(
   revalidatePath(`/clients/${clientId}`);
   return {};
 }
+
+// --- Excel import -------------------------------------------------------------
+// Accepts parsed rows (header→value). Upserts clients, matching an existing
+// record by EMAIL or PHONE first (these are treated as unique identifiers),
+// then by code. Lenient on header casing/spacing. Returns how many rows were
+// created vs. updated so the UI can alert the user.
+export async function importClients(
+  rows: Record<string, string>[],
+): Promise<Result & { count?: number; created?: number; updated?: number }> {
+  const supabase = await db();
+  const norm = (r: Record<string, string>) => {
+    const m: Record<string, string> = {};
+    for (const [k, v] of Object.entries(r))
+      m[k.trim().toLowerCase().replace(/\s+/g, "_")] = (v ?? "").toString().trim();
+    return m;
+  };
+  let created = 0;
+  let updated = 0;
+  for (const raw of rows) {
+    const r = norm(raw);
+    const name = r.name || r.client || r.client_name;
+    const code = r.code || r.client_code;
+    const email = (r.email || "").toLowerCase();
+    const phone = r.phone || "";
+    if (!name || !code) continue;
+    const ct = r.client_type || r.type;
+    const values = {
+      name,
+      code,
+      phone: phone || null,
+      email: email || null,
+      tax_id: r.tax_id || r.taxid || null,
+      billing_address: r.billing_address || r.address || null,
+      client_type:
+        ct && /ware/i.test(ct)
+          ? "Warehouse"
+          : ct && /trans/i.test(ct)
+            ? "Transportation"
+            : null,
+      multi_location_charge: r.multi_location_charge
+        ? Number(r.multi_location_charge) || 0
+        : 0,
+    };
+
+    // Match an existing client: email > phone > code (all amongst non-deleted).
+    let existing: { id: string } | null = null;
+    if (email) {
+      const { data } = await supabase
+        .from("clients")
+        .select("id")
+        .ilike("email", email)
+        .is("deleted_at", null)
+        .maybeSingle();
+      existing = data ?? null;
+    }
+    if (!existing && phone) {
+      const { data } = await supabase
+        .from("clients")
+        .select("id")
+        .eq("phone", phone)
+        .is("deleted_at", null)
+        .maybeSingle();
+      existing = data ?? null;
+    }
+    if (!existing) {
+      const { data } = await supabase
+        .from("clients")
+        .select("id")
+        .ilike("code", code)
+        .is("deleted_at", null)
+        .maybeSingle();
+      existing = data ?? null;
+    }
+
+    if (existing) {
+      const { error } = await supabase
+        .from("clients")
+        .update(values)
+        .eq("id", existing.id);
+      if (error) return { error: `Row "${name}": ${error.message}`, count: created + updated };
+      updated++;
+    } else {
+      const { error } = await supabase.from("clients").insert(values);
+      if (error) return { error: `Row "${name}": ${error.message}`, count: created + updated };
+      created++;
+    }
+  }
+  revalidatePath("/clients");
+  return { count: created + updated, created, updated };
+}

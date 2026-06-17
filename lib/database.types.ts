@@ -9,6 +9,48 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      waybill_price_history: {
+        Row: { id: string; waybill_id: string; original_amount: number | null; new_amount: number | null; currency: string; reason: string | null; changed_by: string | null; changed_at: string; };
+        Insert: { id?: string; waybill_id: string; original_amount?: number | null; new_amount?: number | null; currency?: string; reason?: string | null; changed_by?: string | null; changed_at?: string; };
+        Update: { id?: string; waybill_id?: string; original_amount?: number | null; new_amount?: number | null; currency?: string; reason?: string | null; changed_by?: string | null; changed_at?: string; };
+        Relationships: [];
+      };
+      request_deliveries: {
+        Row: { id: string; request_id: string; location_id: string | null; sequence: number; receiver_name: string | null; receiver_phone: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; request_id: string; location_id?: string | null; sequence?: number; receiver_name?: string | null; receiver_phone?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; request_id?: string; location_id?: string | null; sequence?: number; receiver_name?: string | null; receiver_phone?: string | null; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
+      cities: {
+        Row: { id: string; name: string; code: string | null; region: string | null; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; name: string; code?: string | null; region?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; name?: string; code?: string | null; region?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
+      routes: {
+        Row: { id: string; from_city_id: string; to_city_id: string; distance_km: number | null; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; from_city_id: string; to_city_id: string; distance_km?: number | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; from_city_id?: string; to_city_id?: string; distance_km?: number | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
+      service_types: {
+        Row: { id: string; name: string; code: string | null; requires_quantity: boolean; sort_order: number; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; name: string; code?: string | null; requires_quantity?: boolean; sort_order?: number; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; name?: string; code?: string | null; requires_quantity?: boolean; sort_order?: number; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
+      supplier_trucks: {
+        Row: { id: string; supplier_id: string; plate_number: string; driver_name: string | null; driver_id_no: string | null; driver_mobile: string | null; truck_type_id: string | null; service_type_id: string | null; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; supplier_id: string; plate_number: string; driver_name?: string | null; driver_id_no?: string | null; driver_mobile?: string | null; truck_type_id?: string | null; service_type_id?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; supplier_id?: string; plate_number?: string; driver_name?: string | null; driver_id_no?: string | null; driver_mobile?: string | null; truck_type_id?: string | null; service_type_id?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
+      standard_rates: {
+        Row: { id: string; service_type_id: string | null; route_id: string | null; rate: number; currency: string; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; service_type_id?: string | null; route_id?: string | null; rate: number; currency?: string; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; service_type_id?: string | null; route_id?: string | null; rate?: number; currency?: string; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
       client_contacts: {
         Row: {
           id: string;
@@ -62,6 +104,9 @@ export type Database = {
           base_charge: number;
           margin_type: string | null;
           margin_value: number | null;
+          client_type: string | null;
+          multi_location_charge: number;
+          rate_basis: string;
           is_active: boolean;
           deleted_at: string | null;
           created_at: string;
@@ -83,6 +128,9 @@ export type Database = {
           base_charge?: number;
           margin_type?: string | null;
           margin_value?: number | null;
+          client_type?: string | null;
+          multi_location_charge?: number;
+          rate_basis?: string;
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
@@ -104,6 +152,9 @@ export type Database = {
           base_charge?: number;
           margin_type?: string | null;
           margin_value?: number | null;
+          client_type?: string | null;
+          multi_location_charge?: number;
+          rate_basis?: string;
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
@@ -118,6 +169,8 @@ export type Database = {
           delivery_location_id: string | null;
           truck_type_id: string | null;
           shipment_type_id: string | null;
+          route_id: string | null;
+          service_type_id: string | null;
           rate: number;
           currency: string;
           effective_from: string | null;
@@ -133,6 +186,8 @@ export type Database = {
           delivery_location_id?: string | null;
           truck_type_id?: string | null;
           shipment_type_id?: string | null;
+          route_id?: string | null;
+          service_type_id?: string | null;
           rate: number;
           currency?: string;
           effective_from?: string | null;
@@ -148,6 +203,8 @@ export type Database = {
           delivery_location_id?: string | null;
           truck_type_id?: string | null;
           shipment_type_id?: string | null;
+          route_id?: string | null;
+          service_type_id?: string | null;
           rate?: number;
           currency?: string;
           effective_from?: string | null;
@@ -182,6 +239,10 @@ export type Database = {
           notes: string | null;
           carrier_cost: number | null;
           customer_charge: number | null;
+          supplier_truck_id: string | null;
+          outsourced_driver_name: string | null;
+          outsourced_driver_id: string | null;
+          confirmed_at: string | null;
           created_by: string | null;
           updated_by: string | null;
           created_at: string;
@@ -209,6 +270,10 @@ export type Database = {
           notes?: string | null;
           carrier_cost?: number | null;
           customer_charge?: number | null;
+          supplier_truck_id?: string | null;
+          outsourced_driver_name?: string | null;
+          outsourced_driver_id?: string | null;
+          confirmed_at?: string | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;
@@ -236,6 +301,10 @@ export type Database = {
           notes?: string | null;
           carrier_cost?: number | null;
           customer_charge?: number | null;
+          supplier_truck_id?: string | null;
+          outsourced_driver_name?: string | null;
+          outsourced_driver_id?: string | null;
+          confirmed_at?: string | null;
           created_by?: string | null;
           updated_by?: string | null;
           created_at?: string;
@@ -331,6 +400,9 @@ export type Database = {
           lat: number | null;
           lng: number | null;
           maps_url: string | null;
+          city_id: string | null;
+          receiver_name: string | null;
+          receiver_phone: string | null;
           is_active: boolean;
           deleted_at: string | null;
           created_at: string;
@@ -345,6 +417,9 @@ export type Database = {
           lat?: number | null;
           lng?: number | null;
           maps_url?: string | null;
+          city_id?: string | null;
+          receiver_name?: string | null;
+          receiver_phone?: string | null;
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
@@ -359,6 +434,9 @@ export type Database = {
           lat?: number | null;
           lng?: number | null;
           maps_url?: string | null;
+          city_id?: string | null;
+          receiver_name?: string | null;
+          receiver_phone?: string | null;
           is_active?: boolean;
           deleted_at?: string | null;
           created_at?: string;
@@ -534,6 +612,8 @@ export type Database = {
           supplier_id: string;
           truck_type_id: string | null;
           lane: string | null;
+          route_id: string | null;
+          service_type_id: string | null;
           rate: number;
           currency: string;
           is_active: boolean;
@@ -546,6 +626,8 @@ export type Database = {
           supplier_id: string;
           truck_type_id?: string | null;
           lane?: string | null;
+          route_id?: string | null;
+          service_type_id?: string | null;
           rate: number;
           currency?: string;
           is_active?: boolean;
@@ -558,6 +640,8 @@ export type Database = {
           supplier_id?: string;
           truck_type_id?: string | null;
           lane?: string | null;
+          route_id?: string | null;
+          service_type_id?: string | null;
           rate?: number;
           currency?: string;
           is_active?: boolean;
@@ -643,6 +727,12 @@ export type Database = {
           weight: number | null;
           pallets: number | null;
           distance_km: number | null;
+          service_type_id: string | null;
+          route_id: string | null;
+          additional_services: string | null;
+          additional_services_price: number | null;
+          request_source: string | null;
+          selling_price: number | null;
           required_pickup_at: string | null;
           delivery_date: string | null;
           special_instructions: string | null;
@@ -669,6 +759,12 @@ export type Database = {
           weight?: number | null;
           pallets?: number | null;
           distance_km?: number | null;
+          service_type_id?: string | null;
+          route_id?: string | null;
+          additional_services?: string | null;
+          additional_services_price?: number | null;
+          request_source?: string | null;
+          selling_price?: number | null;
           required_pickup_at?: string | null;
           delivery_date?: string | null;
           special_instructions?: string | null;
@@ -695,6 +791,12 @@ export type Database = {
           weight?: number | null;
           pallets?: number | null;
           distance_km?: number | null;
+          service_type_id?: string | null;
+          route_id?: string | null;
+          additional_services?: string | null;
+          additional_services_price?: number | null;
+          request_source?: string | null;
+          selling_price?: number | null;
           required_pickup_at?: string | null;
           delivery_date?: string | null;
           special_instructions?: string | null;
@@ -718,6 +820,7 @@ export type Database = {
           code: string | null;
           description: string | null;
           is_active: boolean;
+          deleted_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -727,6 +830,7 @@ export type Database = {
           code?: string | null;
           description?: string | null;
           is_active?: boolean;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -736,6 +840,7 @@ export type Database = {
           code?: string | null;
           description?: string | null;
           is_active?: boolean;
+          deleted_at?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -748,6 +853,7 @@ export type Database = {
           code: string;
           plate_number: string;
           truck_type_id: string | null;
+          current_city_id: string | null;
           capacity: number | null;
           capacity_unit: string | null;
           status: Database["public"]["Enums"]["truck_status"];
@@ -763,6 +869,7 @@ export type Database = {
           code: string;
           plate_number: string;
           truck_type_id?: string | null;
+          current_city_id?: string | null;
           capacity?: number | null;
           capacity_unit?: string | null;
           status?: Database["public"]["Enums"]["truck_status"];
@@ -778,6 +885,7 @@ export type Database = {
           code?: string;
           plate_number?: string;
           truck_type_id?: string | null;
+          current_city_id?: string | null;
           capacity?: number | null;
           capacity_unit?: string | null;
           status?: Database["public"]["Enums"]["truck_status"];
@@ -868,6 +976,9 @@ export type Database = {
           client_name: string | null;
           pickup_address: string | null;
           delivery_address: string | null;
+          receiver_name: string | null;
+          po_reference: string | null;
+          delivery_maps_url: string | null;
           truck_number: string | null;
           truck_type_name: string | null;
           shipment_type_name: string | null;
@@ -897,6 +1008,9 @@ export type Database = {
           client_name?: string | null;
           pickup_address?: string | null;
           delivery_address?: string | null;
+          receiver_name?: string | null;
+          po_reference?: string | null;
+          delivery_maps_url?: string | null;
           truck_number?: string | null;
           truck_type_name?: string | null;
           shipment_type_name?: string | null;
@@ -926,6 +1040,9 @@ export type Database = {
           client_name?: string | null;
           pickup_address?: string | null;
           delivery_address?: string | null;
+          receiver_name?: string | null;
+          po_reference?: string | null;
+          delivery_maps_url?: string | null;
           truck_number?: string | null;
           truck_type_name?: string | null;
           shipment_type_name?: string | null;
@@ -1013,7 +1130,13 @@ export type Database = {
     Functions: { [_ in never]: never };
     Enums: {
       assignment_type: "own" | "outsourced";
-      dispatch_status: "Assigned" | "Dispatched" | "Picked Up" | "In Transit" | "Delivered";
+      dispatch_status:
+        | "Assigned"
+        | "Dispatched"
+        | "Picked Up"
+        | "In Transit"
+        | "Delivered"
+        | "Confirmed";
       driver_status: "available" | "on_trip" | "off_duty" | "inactive";
       exception_kind: "delay" | "damage" | "complaint";
       location_kind: "pickup" | "delivery";

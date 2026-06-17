@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
@@ -37,6 +37,13 @@ type Contact = Tables<"client_contacts">;
 type Location = Tables<"locations">;
 type Rate = Tables<"contract_rates">;
 type Lookup = { id: string; name: string };
+type RouteOption = { id: string; label: string };
+type StandardRate = {
+  service_type_id: string | null;
+  route_id: string | null;
+  rate: number;
+  currency: string;
+};
 
 export function ClientDetail({
   client,
@@ -45,6 +52,10 @@ export function ClientDetail({
   rates,
   truckTypes,
   shipmentTypes,
+  serviceTypes,
+  cities,
+  routeOptions,
+  standardRates,
   canEdit,
 }: {
   client: Client;
@@ -53,6 +64,10 @@ export function ClientDetail({
   rates: Rate[];
   truckTypes: Lookup[];
   shipmentTypes: Lookup[];
+  serviceTypes: Lookup[];
+  cities: Lookup[];
+  routeOptions: RouteOption[];
+  standardRates: StandardRate[];
   canEdit: boolean;
 }) {
   const router = useRouter();
@@ -65,7 +80,12 @@ export function ClientDetail({
     list.find((x) => x.id === id)?.name ?? "—";
   const locationById = (id: string | null) =>
     locations.find((l) => l.id === id)?.name ?? "—";
-  const deliveryLocations = locations.filter((l) => l.kind === "delivery");
+  const cityName = useMemo(
+    () => new Map(cities.map((c) => [c.id, c.name])),
+    [cities],
+  );
+  const routeLabel = (id: string | null) =>
+    id ? routeOptions.find((r) => r.id === id)?.label ?? "—" : null;
 
   return (
     <div className="space-y-6">
@@ -86,6 +106,11 @@ export function ClientDetail({
               <Badge variant={client.is_active ? "success" : "default"}>
                 {client.is_active ? "Active" : "Inactive"}
               </Badge>
+              {client.client_type ? (
+                <Badge variant="info" className="ml-1">
+                  {client.client_type}
+                </Badge>
+              ) : null}
             </p>
           </div>
           {canEdit ? (
@@ -109,9 +134,19 @@ export function ClientDetail({
 
       <Card>
         <CardContent className="grid grid-cols-1 gap-4 p-6 sm:grid-cols-2 lg:grid-cols-4">
+          <Info label="Client type" value={client.client_type} />
           <Info label="Phone" value={client.phone} />
           <Info label="Email" value={client.email} />
           <Info label="Tax ID" value={client.tax_id} />
+          <Info
+            label="Multiple-locations charge"
+            value={
+              client.multi_location_charge
+                ? formatMoney(client.multi_location_charge, client.currency)
+                : "—"
+            }
+          />
+          <Info label="Rate basis" value="Per trip" />
           <Info label="Billing address" value={client.billing_address} />
         </CardContent>
       </Card>
@@ -176,13 +211,15 @@ export function ClientDetail({
             <TR>
               <TH>Name</TH>
               <TH>Kind</TH>
+              <TH>City</TH>
+              <TH>Receiver</TH>
               <TH>Address</TH>
               <TH></TH>
             </TR>
           </THead>
           <TBody>
             {locations.length === 0 ? (
-              <EmptyRow cols={4} />
+              <EmptyRow cols={6} />
             ) : (
               locations.map((l) => (
                 <TR key={l.id}>
@@ -191,6 +228,21 @@ export function ClientDetail({
                     <Badge variant={l.kind === "pickup" ? "info" : "navy"}>
                       {l.kind}
                     </Badge>
+                  </TD>
+                  <TD>{cityName.get(l.city_id ?? "") ?? "—"}</TD>
+                  <TD>
+                    {l.receiver_name ? (
+                      <span>
+                        {l.receiver_name}
+                        {l.receiver_phone ? (
+                          <span className="block text-xs text-muted-foreground">
+                            {l.receiver_phone}
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
                   </TD>
                   <TD>{l.address ?? "—"}</TD>
                   <TD className="text-right">
@@ -211,7 +263,7 @@ export function ClientDetail({
         </Table>
       </Section>
 
-      {/* Contract rates */}
+      {/* Contract rates (matrix: Service Type x Route x Price) */}
       <Section
         title="Contract rates"
         canEdit={canEdit}
@@ -220,8 +272,8 @@ export function ClientDetail({
         <Table>
           <THead>
             <TR>
-              <TH>Delivery location</TH>
-              <TH>Truck type</TH>
+              <TH>Service type</TH>
+              <TH>Route</TH>
               <TH>Shipment type</TH>
               <TH>Rate</TH>
               <TH></TH>
@@ -233,8 +285,15 @@ export function ClientDetail({
             ) : (
               rates.map((r) => (
                 <TR key={r.id}>
-                  <TD>{locationById(r.delivery_location_id)}</TD>
-                  <TD>{nameById(truckTypes, r.truck_type_id)}</TD>
+                  <TD className="font-medium">
+                    {r.service_type_id
+                      ? nameById(serviceTypes, r.service_type_id)
+                      : nameById(truckTypes, r.truck_type_id)}
+                  </TD>
+                  <TD>
+                    {routeLabel(r.route_id) ??
+                      locationById(r.delivery_location_id)}
+                  </TD>
                   <TD>{nameById(shipmentTypes, r.shipment_type_id)}</TD>
                   <TD className="font-medium">
                     {formatMoney(r.rate, r.currency)}
@@ -274,6 +333,7 @@ export function ClientDetail({
         <LocationDialog
           clientId={client.id}
           location={location === "new" ? undefined : location}
+          cities={cities}
           onClose={() => setLocation(null)}
         />
       ) : null}
@@ -281,9 +341,10 @@ export function ClientDetail({
         <RateDialog
           clientId={client.id}
           rate={rate === "new" ? undefined : rate}
-          deliveryLocations={deliveryLocations}
-          truckTypes={truckTypes}
+          serviceTypes={serviceTypes}
+          routeOptions={routeOptions}
           shipmentTypes={shipmentTypes}
+          standardRates={standardRates}
           onClose={() => setRate(null)}
         />
       ) : null}
@@ -475,10 +536,12 @@ function ContactDialog({
 function LocationDialog({
   clientId,
   location,
+  cities,
   onClose,
 }: {
   clientId: string;
   location?: Location;
+  cities: Lookup[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -486,6 +549,9 @@ function LocationDialog({
     defaultValues: {
       kind: location?.kind ?? "pickup",
       name: location?.name ?? "",
+      city_id: location?.city_id ?? "",
+      receiver_name: location?.receiver_name ?? "",
+      receiver_phone: location?.receiver_phone ?? "",
       address: location?.address ?? "",
       maps_url: location?.maps_url ?? "",
       lat: location?.lat?.toString() ?? "",
@@ -521,6 +587,22 @@ function LocationDialog({
         <Field label="Name">
           <Input {...register("name", { required: true })} />
         </Field>
+        <Field label="City">
+          <Select {...register("city_id")}>
+            <option value="">— Select city —</option>
+            {cities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </Select>
+        </Field>
+        <Field label="Receiver in-charge name">
+          <Input {...register("receiver_name")} />
+        </Field>
+        <Field label="Receiver in-charge phone">
+          <Input {...register("receiver_phone")} />
+        </Field>
       </div>
       <Field label="Address">
         <Textarea {...register("address")} />
@@ -543,23 +625,28 @@ function LocationDialog({
 function RateDialog({
   clientId,
   rate,
-  deliveryLocations,
-  truckTypes,
+  serviceTypes,
+  routeOptions,
   shipmentTypes,
+  standardRates,
   onClose,
 }: {
   clientId: string;
   rate?: Rate;
-  deliveryLocations: Location[];
-  truckTypes: Lookup[];
+  serviceTypes: Lookup[];
+  routeOptions: RouteOption[];
   shipmentTypes: Lookup[];
+  standardRates: StandardRate[];
   onClose: () => void;
 }) {
   const router = useRouter();
-  const { register, handleSubmit } = useForm({
+  const { register, handleSubmit, watch, setValue } = useForm({
     defaultValues: {
+      // legacy fields preserved so editing old rows doesn't drop them
       delivery_location_id: rate?.delivery_location_id ?? "",
       truck_type_id: rate?.truck_type_id ?? "",
+      service_type_id: rate?.service_type_id ?? "",
+      route_id: rate?.route_id ?? "",
       shipment_type_id: rate?.shipment_type_id ?? "",
       rate: rate?.rate?.toString() ?? "",
       currency: rate?.currency ?? "SAR",
@@ -569,6 +656,24 @@ function RateDialog({
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const serviceId = watch("service_type_id");
+  const routeId = watch("route_id");
+  // Best-match standard rate: exact service+route, then service-only, then route-only.
+  const standard = useMemo(() => {
+    if (standardRates.length === 0) return null;
+    const exact = standardRates.find(
+      (s) => s.service_type_id === serviceId && s.route_id === routeId,
+    );
+    const svc = standardRates.find(
+      (s) => s.service_type_id === serviceId && !s.route_id,
+    );
+    const rte = standardRates.find(
+      (s) => !s.service_type_id && s.route_id === routeId,
+    );
+    return exact ?? svc ?? rte ?? null;
+  }, [standardRates, serviceId, routeId]);
+
   const submit = handleSubmit(async (values) => {
     setSaving(true);
     setError(null);
@@ -586,46 +691,70 @@ function RateDialog({
       saving={saving}
       error={error}
     >
-      <Field label="Delivery location">
-        <Select {...register("delivery_location_id")}>
-          <option value="">— Any —</option>
-          {deliveryLocations.map((l) => (
-            <option key={l.id} value={l.id}>
-              {l.name}
-            </option>
-          ))}
-        </Select>
-      </Field>
+      <input type="hidden" {...register("delivery_location_id")} />
+      <input type="hidden" {...register("truck_type_id")} />
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Truck type">
-          <Select {...register("truck_type_id")}>
+        <Field label="Service type">
+          <Select {...register("service_type_id")}>
             <option value="">— Any —</option>
-            {truckTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
-        <Field label="Shipment type">
-          <Select {...register("shipment_type_id")}>
-            <option value="">— Any —</option>
-            {shipmentTypes.map((s) => (
+            {serviceTypes.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
               </option>
             ))}
           </Select>
         </Field>
+        <Field label="Route">
+          <Select {...register("route_id")}>
+            <option value="">— Any —</option>
+            {routeOptions.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.label}
+              </option>
+            ))}
+          </Select>
+        </Field>
       </div>
+      <Field label="Shipment type (optional)">
+        <Select {...register("shipment_type_id")}>
+          <option value="">— Any —</option>
+          {shipmentTypes.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Rate">
-          <Input type="number" step="0.01" {...register("rate", { required: true })} />
+          <Input
+            type="number"
+            step="0.01"
+            {...register("rate", { required: true })}
+          />
         </Field>
         <Field label="Currency">
           <Input {...register("currency")} />
         </Field>
       </div>
+      {standard ? (
+        <div className="flex items-center justify-between rounded-md bg-brand-blue/5 px-3 py-2 text-sm">
+          <span className="text-muted-foreground">
+            Standard rate: {formatMoney(standard.rate, standard.currency)}
+          </span>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setValue("rate", standard.rate.toString());
+              setValue("currency", standard.currency);
+            }}
+          >
+            Use standard
+          </Button>
+        </div>
+      ) : null}
       <div className="grid grid-cols-2 gap-3">
         <Field label="Effective from">
           <Input type="date" {...register("effective_from")} />

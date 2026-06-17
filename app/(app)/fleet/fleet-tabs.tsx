@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, KeyRound, UserPlus, Unlink } from "lucide-react";
@@ -45,6 +46,7 @@ export function FleetTabs({
   suppliers,
   truckTypes,
   supplierTypes,
+  cities,
   driverLogins,
   canEdit,
 }: {
@@ -53,6 +55,7 @@ export function FleetTabs({
   suppliers: Supplier[];
   truckTypes: Lookup[];
   supplierTypes: SupplierType[];
+  cities: Lookup[];
   driverLogins: Record<string, DriverLogin>;
   canEdit: boolean;
 }) {
@@ -253,7 +256,14 @@ export function FleetTabs({
             ) : (
               suppliers.map((s) => (
                 <TR key={s.id}>
-                  <TD className="font-medium">{s.name}</TD>
+                  <TD className="font-medium">
+                    <Link
+                      href={`/fleet/suppliers/${s.id}`}
+                      className="text-brand-navy hover:text-brand-blue hover:underline"
+                    >
+                      {s.name}
+                    </Link>
+                  </TD>
                   <TD>{s.code ?? "—"}</TD>
                   <TD>{s.phone ?? "—"}</TD>
                   <TD>
@@ -287,6 +297,7 @@ export function FleetTabs({
           truck={truck === "new" ? undefined : truck}
           truckTypes={truckTypes}
           drivers={drivers}
+          cities={cities}
           onClose={() => setTruck(null)}
         />
       ) : null}
@@ -424,11 +435,13 @@ function TruckDialog({
   truck,
   truckTypes,
   drivers,
+  cities,
   onClose,
 }: {
   truck?: Truck;
   truckTypes: Lookup[];
   drivers: Driver[];
+  cities: Lookup[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -437,6 +450,7 @@ function TruckDialog({
       code: truck?.code ?? "",
       plate_number: truck?.plate_number ?? "",
       truck_type_id: truck?.truck_type_id ?? "",
+      current_city_id: truck?.current_city_id ?? "",
       capacity: truck?.capacity?.toString() ?? "",
       capacity_unit: truck?.capacity_unit ?? "kg",
       status: truck?.status ?? "available",
@@ -485,6 +499,16 @@ function TruckDialog({
             <option value="available">Available</option>
             <option value="busy">Busy</option>
             <option value="maintenance">Maintenance</option>
+          </Select>
+        </Field>
+        <Field label="Base city">
+          <Select {...register("current_city_id")}>
+            <option value="">— None —</option>
+            {cities.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
           </Select>
         </Field>
         <Field label="Capacity">

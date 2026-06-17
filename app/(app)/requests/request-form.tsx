@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
@@ -11,15 +11,39 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { SearchableSelect } from "@/components/app/searchable-select";
+import { formatMoney } from "@/lib/format";
+import { computeSelling } from "@/lib/selling-price";
 import type { Tables } from "@/lib/database.types";
 import { createRequest, updateRequest } from "./actions";
 
 type Lookup = { id: string; name: string };
+type ServiceType = { id: string; name: string; requires_quantity: boolean };
 type Loc = {
   id: string;
   client_id: string;
   kind: "pickup" | "delivery";
   name: string;
+  city_id: string | null;
+  receiver_name: string | null;
+  receiver_phone: string | null;
+};
+type RouteRow = {
+  id: string;
+  from_city_id: string;
+  to_city_id: string;
+  distance_km: number | null;
+};
+type ContractRate = {
+  service_type_id: string | null;
+  route_id: string | null;
+  rate: number;
+  currency: string;
+  client_id?: string | null;
+};
+type Stop = {
+  location_id: string | null;
+  receiver_name: string;
+  receiver_phone: string;
 };
 type ItemRow = {
   item_name: string;
@@ -34,6 +58,11 @@ const blankItem = (): ItemRow => ({
   quantity: "",
   unit_price: "",
 });
+const blankStop = (): Stop => ({
+  location_id: null,
+  receiver_name: "",
+  receiver_phone: "",
+});
 
 export function RequestForm({
   mode,
@@ -42,6 +71,16 @@ export function RequestForm({
   locations,
   shipmentTypes,
   truckTypes,
+  serviceTypes = [],
+  cities = [],
+  routes = [],
+  contractRates = [],
+  standardRates = [],
+  deliveries = [],
+  multiLocationCharge = 0,
+  clientMultiCharge = {},
+  canSetPricing = false,
+  isClient = false,
   lockClientId,
   onDone,
   onCancel,
@@ -52,6 +91,16 @@ export function RequestForm({
   locations: Loc[];
   shipmentTypes: Lookup[];
   truckTypes: Lookup[];
+  serviceTypes?: ServiceType[];
+  cities?: Lookup[];
+  routes?: RouteRow[];
+  contractRates?: ContractRate[];
+  standardRates?: ContractRate[];
+  deliveries?: { location_id: string | null; receiver_name: string | null; receiver_phone: string | null }[];
+  multiLocationCharge?: number;
+  clientMultiCharge?: Record<string, number>;
+  canSetPricing?: boolean;
+  isClient?: boolean;
   lockClientId?: string | null;
   onDone?: () => void;
   onCancel?: () => void;
@@ -64,27 +113,60 @@ export function RequestForm({
   const [pickupId, setPickupId] = useState<string | null>(
     request?.pickup_location_id ?? null,
   );
-  const [deliveryId, setDeliveryId] = useState<string | null>(
-    request?.delivery_location_id ?? null,
+  const [stops, setStops] = useState<Stop[]>(
+    deliveries.length > 0
+      ? deliveries.map((d) => ({
+          location_id: d.location_id,
+          receiver_name: d.receiver_name ?? "",
+          receiver_phone: d.receiver_phone ?? "",
+        }))
+      : [
+          {
+            location_id: request?.delivery_location_id ?? null,
+            receiver_name: "",
+            receiver_phone: "",
+          },
+        ],
   );
   const [items, setItems] = useState<ItemRow[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { register, handleSubmit } = useForm({
+  const { register, handleSubmit, watch, setValue } = useForm({
     defaultValues: {
       shipment_type_id: request?.shipment_type_id ?? "",
+      service_type_id: request?.service_type_id ?? "",
+      route_id: request?.route_id ?? "",
       truck_type_id: request?.truck_type_id ?? "",
       quantity: request?.quantity?.toString() ?? "",
       weight: request?.weight?.toString() ?? "",
       pallets: request?.pallets?.toString() ?? "",
       distance_km: request?.distance_km?.toString() ?? "",
+      additional_services: request?.additional_services ?? "",
+      additional_services_price:
+        request?.additional_services_price?.toString() ?? "",
+      request_source:
+        request?.request_source ?? (isClient ? "portal" : "inhouse"),
+      selling_price: request?.selling_price?.toString() ?? "",
       required_pickup_at: request?.required_pickup_at?.slice(0, 16) ?? "",
       delivery_date: request?.delivery_date?.slice(0, 10) ?? "",
       special_instructions: request?.special_instructions ?? "",
       po_reference: request?.po_reference ?? "",
     },
   });
+
+  const locById = useMemo(
+    () => new Map(locations.map((l) => [l.id, l])),
+    [locations],
+  );
+  const cityName = useMemo(
+    () => new Map(cities.map((c) => [c.id, c.name])),
+    [cities],
+  );
+  const cityOf = (locId: string | null) => {
+    const cid = locId ? locById.get(locId)?.city_id ?? null : null;
+    return cid ? cityName.get(cid) ?? null : null;
+  };
 
   const pickupOptions = locations
     .filter((l) => l.client_id === clientId && l.kind === "pickup")
@@ -96,7 +178,98 @@ export function RequestForm({
   const onClientChange = (id: string | null) => {
     setClientId(id);
     setPickupId(null);
-    setDeliveryId(null);
+    setStops([blankStop()]);
+  };
+
+  // --- Service type → conditional quantity --------------------------------------
+  const serviceTypeId = watch("service_type_id");
+  const activeService = serviceTypes.find((s) => s.id === serviceTypeId);
+  const needsQuantity = activeService?.requires_quantity ?? false;
+
+  // --- Auto route + distance from pickup city → first delivery city -------------
+  const firstDeliveryId = stops[0]?.location_id ?? null;
+  const matchedRoute = useMemo(() => {
+    const toCityId = firstDeliveryId
+      ? locById.get(firstDeliveryId)?.city_id ?? null
+      : null;
+    const fromCityId = pickupId ? locById.get(pickupId)?.city_id ?? null : null;
+    if (!fromCityId || !toCityId) return null;
+    return routes.find(
+      (r) => r.from_city_id === fromCityId && r.to_city_id === toCityId,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickupId, firstDeliveryId, routes, locById]);
+
+  useEffect(() => {
+    if (matchedRoute) {
+      setValue("route_id", matchedRoute.id);
+      if (matchedRoute.distance_km != null)
+        setValue("distance_km", matchedRoute.distance_km.toString());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [matchedRoute]);
+
+  // --- Suggested selling price (admin) ------------------------------------------
+  const additionalPrice = watch("additional_services_price");
+  const mlc =
+    (clientId ? clientMultiCharge[clientId] : undefined) ??
+    multiLocationCharge ??
+    0;
+  const suggested = useMemo(() => {
+    if (!canSetPricing) return null;
+    const routeId = matchedRoute?.id ?? null;
+    // Contract rates may carry a client_id (create passes all clients); keep
+    // only those for the selected client (rows without a client_id are global).
+    const ownContract = contractRates.filter(
+      (r) => !r.client_id || r.client_id === clientId,
+    );
+    return computeSelling({
+      contractRates: ownContract,
+      standardRates,
+      serviceTypeId: serviceTypeId || null,
+      routeId,
+      stops: stops.filter((s) => s.location_id).length || 1,
+      multiLocationCharge: mlc,
+      additional: Number(additionalPrice) || 0,
+    });
+  }, [
+    canSetPricing,
+    contractRates,
+    standardRates,
+    clientId,
+    serviceTypeId,
+    matchedRoute,
+    stops,
+    additionalPrice,
+    mlc,
+  ]);
+
+  // Auto-fill the selling price from the suggestion while it is still blank.
+  useEffect(() => {
+    if (canSetPricing && suggested && !watch("selling_price")) {
+      setValue("selling_price", suggested.total.toString());
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [suggested]);
+
+  const setStop = (i: number, patch: Partial<Stop>) =>
+    setStops((prev) =>
+      prev.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+    );
+  const onStopLocation = (i: number, locId: string | null) => {
+    const loc = locId ? locById.get(locId) : undefined;
+    setStops((prev) =>
+      prev.map((row, idx) =>
+        idx === i
+          ? {
+              location_id: locId,
+              // Prefill receiver from the location, keep any manual override.
+              receiver_name: row.receiver_name || (loc?.receiver_name ?? ""),
+              receiver_phone: row.receiver_phone || (loc?.receiver_phone ?? ""),
+            }
+          : row,
+      ),
+    );
   };
 
   const setItem = (i: number, patch: Partial<ItemRow>) =>
@@ -107,32 +280,48 @@ export function RequestForm({
   const submit = handleSubmit(async (values) => {
     setError(null);
     if (!clientId) return setError("Select a client.");
+    const cleanStops = stops.filter((s) => s.location_id);
+    if (cleanStops.length === 0)
+      return setError("Add at least one delivery location.");
     setSaving(true);
 
     const payload = {
       client_id: clientId,
       pickup_location_id: pickupId,
-      delivery_location_id: deliveryId,
+      delivery_location_id: cleanStops[0].location_id, // primary stop
       shipment_type_id: values.shipment_type_id,
+      service_type_id: values.service_type_id,
       truck_type_id: values.truck_type_id,
-      quantity: values.quantity,
+      route_id: values.route_id,
+      quantity: needsQuantity ? values.quantity : "",
       weight: values.weight,
       pallets: values.pallets,
       distance_km: values.distance_km,
+      additional_services: values.additional_services,
+      additional_services_price: canSetPricing
+        ? values.additional_services_price
+        : "",
+      request_source: values.request_source,
+      selling_price: canSetPricing ? values.selling_price : "",
       required_pickup_at: values.required_pickup_at,
       delivery_date: values.delivery_date,
       special_instructions: values.special_instructions,
       po_reference: values.po_reference,
     };
+    const stopRows = cleanStops.map((s) => ({
+      location_id: s.location_id,
+      receiver_name: s.receiver_name,
+      receiver_phone: s.receiver_phone,
+    }));
 
     if (mode === "create") {
       const cleanItems = items.filter((it) => it.item_name.trim());
-      const res = await createRequest(payload, cleanItems);
+      const res = await createRequest(payload, cleanItems, stopRows);
       setSaving(false);
       if (res.error) return setError(res.error);
       if (res.id) router.push(`/requests/${res.id}`);
     } else if (request) {
-      const res = await updateRequest(request.id, payload);
+      const res = await updateRequest(request.id, payload, stopRows);
       setSaving(false);
       if (res.error) return setError(res.error);
       onDone?.();
@@ -162,6 +351,7 @@ export function RequestForm({
           <Field label="PO reference">
             <Input {...register("po_reference")} placeholder="Optional" />
           </Field>
+
           <Field label="Pickup location">
             <SearchableSelect
               options={pickupOptions}
@@ -171,17 +361,24 @@ export function RequestForm({
               placeholder={clientId ? "Select pickup…" : "Pick a client first"}
               emptyText="No pickup locations for this client"
             />
+            {cityOf(pickupId) ? (
+              <p className="text-xs text-muted-foreground">
+                City: {cityOf(pickupId)}
+              </p>
+            ) : null}
           </Field>
-          <Field label="Delivery location">
-            <SearchableSelect
-              options={deliveryOptions}
-              value={deliveryId}
-              onChange={setDeliveryId}
-              disabled={!clientId}
-              placeholder={clientId ? "Select delivery…" : "Pick a client first"}
-              emptyText="No delivery locations for this client"
-            />
+
+          <Field label="Service type">
+            <Select {...register("service_type_id")}>
+              <option value="">— None —</option>
+              {serviceTypes.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
           </Field>
+
           <Field label="Shipment type">
             <Select {...register("shipment_type_id")}>
               <option value="">— None —</option>
@@ -192,7 +389,7 @@ export function RequestForm({
               ))}
             </Select>
           </Field>
-          <Field label="Truck type">
+          <Field label="Preferred truck type (optional)">
             <Select {...register("truck_type_id")}>
               <option value="">— None —</option>
               {truckTypes.map((t) => (
@@ -204,36 +401,116 @@ export function RequestForm({
           </Field>
         </div>
 
+        {/* Delivery stops (multi-stop) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Delivery locations</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!clientId}
+              onClick={() => setStops((p) => [...p, blankStop()])}
+            >
+              <Plus className="h-4 w-4" /> Add stop
+            </Button>
+          </div>
+          {stops.map((stop, i) => (
+            <div
+              key={i}
+              className="rounded-lg border bg-muted/20 p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-brand-navy">
+                  Stop {i + 1}
+                  {cityOf(stop.location_id)
+                    ? ` · ${cityOf(stop.location_id)}`
+                    : ""}
+                </span>
+                {stops.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setStops((p) => p.filter((_, idx) => idx !== i))
+                    }
+                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Remove stop"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              <SearchableSelect
+                options={deliveryOptions}
+                value={stop.location_id}
+                onChange={(v) => onStopLocation(i, v)}
+                disabled={!clientId}
+                placeholder={clientId ? "Select delivery…" : "Pick a client first"}
+                emptyText="No delivery locations for this client"
+              />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input
+                  value={stop.receiver_name}
+                  onChange={(e) => setStop(i, { receiver_name: e.target.value })}
+                  placeholder="Receiver in-charge name"
+                />
+                <Input
+                  value={stop.receiver_phone}
+                  onChange={(e) =>
+                    setStop(i, { receiver_phone: e.target.value })
+                  }
+                  placeholder="Receiver in-charge phone"
+                />
+              </div>
+            </div>
+          ))}
+          {multiLocationCharge > 0 && stops.length > 1 ? (
+            <p className="text-xs text-muted-foreground">
+              Multiple-locations charge applies to {stops.length - 1} extra
+              stop(s): {formatMoney(multiLocationCharge)} each.
+            </p>
+          ) : null}
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Quantity">
-            <Input type="number" step="0.01" {...register("quantity")} />
-          </Field>
+          {needsQuantity ? (
+            <Field label="Quantity">
+              <Input type="number" step="0.01" {...register("quantity")} />
+              <p className="text-xs text-muted-foreground">
+                Applies to {activeService?.name} service.
+              </p>
+            </Field>
+          ) : null}
           <Field label="Weight">
             <Input type="number" step="0.01" {...register("weight")} />
           </Field>
-          <Field label="Pallets">
-            <Input type="number" step="1" min="0" {...register("pallets")} />
-          </Field>
           <Field label="Distance (km)">
-            <Input type="number" step="0.1" min="0" {...register("distance_km")} />
+            <Input
+              type="number"
+              step="0.1"
+              min="0"
+              {...register("distance_km")}
+            />
             <p className="text-xs text-muted-foreground">
-              Used for distance-based pricing. Maps auto-calc comes later.
+              {matchedRoute
+                ? "Auto-filled from the route — you can override."
+                : "Set a pickup + delivery with cities on a defined route to auto-fill."}
             </p>
           </Field>
           <Field label="Required pickup (date & time)">
             <Input type="datetime-local" {...register("required_pickup_at")} />
-            <p className="text-xs text-muted-foreground">
-              In the calendar, tap the month/year at the top to jump around, then
-              tap a day to go back.
-            </p>
           </Field>
           <Field label="Delivery date">
             <Input type="date" {...register("delivery_date")} />
-            <p className="text-xs text-muted-foreground">
-              Pick year → month → day.
-            </p>
           </Field>
         </div>
+
+        <Field label="Additional services">
+          <Textarea
+            {...register("additional_services")}
+            placeholder="Loading/unloading, waiting time, packaging, etc."
+          />
+        </Field>
 
         <Field label="Special instructions">
           <Textarea
@@ -241,7 +518,68 @@ export function RequestForm({
             placeholder="Handling notes, access details, etc."
           />
         </Field>
+
+        {/* Request source */}
+        <Field label="Request source">
+          {isClient ? (
+            <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+              Customer portal
+            </div>
+          ) : (
+            <Select {...register("request_source")}>
+              <option value="inhouse">In-house (on behalf of client)</option>
+              <option value="portal">Customer portal</option>
+            </Select>
+          )}
+        </Field>
       </Card>
+
+      {/* Admin pricing */}
+      {canSetPricing ? (
+        <Card className="space-y-3 p-5">
+          <h3 className="text-sm font-semibold text-brand-navy">
+            Pricing (admin)
+          </h3>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Additional services price">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                {...register("additional_services_price")}
+                placeholder="0"
+              />
+            </Field>
+            <Field label="Trip selling price (override)">
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                {...register("selling_price")}
+                placeholder="Leave blank to use the contract rate"
+              />
+            </Field>
+          </div>
+          {suggested ? (
+            <div className="flex items-center justify-between rounded-md bg-brand-blue/5 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                Suggested (contract rate + extra stops + additional):{" "}
+                {formatMoney(suggested.total, suggested.currency)}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setValue("selling_price", suggested.total.toString())
+                }
+              >
+                Use suggested
+              </Button>
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
 
       {mode === "create" ? (
         <Card className="space-y-3 p-5">
@@ -271,9 +609,7 @@ export function RequestForm({
                   <Field label={i === 0 ? "Item" : ""}>
                     <Input
                       value={it.item_name}
-                      onChange={(e) =>
-                        setItem(i, { item_name: e.target.value })
-                      }
+                      onChange={(e) => setItem(i, { item_name: e.target.value })}
                       placeholder="Name"
                     />
                   </Field>

@@ -22,6 +22,8 @@ type FormValues = {
   email: string;
   billing_address: string;
   notes: string;
+  client_type: "" | "Warehouse" | "Transportation";
+  multi_location_charge: string;
   is_active: boolean;
   pricing_mode: "fixed" | "per_km";
   currency: string;
@@ -50,6 +52,9 @@ export function ClientDialog({
       email: client?.email ?? "",
       billing_address: client?.billing_address ?? "",
       notes: client?.notes ?? "",
+      client_type:
+        (client?.client_type as "" | "Warehouse" | "Transportation") ?? "",
+      multi_location_charge: client?.multi_location_charge?.toString() ?? "0",
       is_active: client?.is_active ?? true,
       pricing_mode: (client?.pricing_mode as "fixed" | "per_km") ?? "fixed",
       currency: client?.currency ?? "SAR",
@@ -101,6 +106,30 @@ export function ClientDialog({
           <div className="space-y-1.5">
             <Label htmlFor="tax_id">Tax ID</Label>
             <Input id="tax_id" {...register("tax_id")} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="client_type">Client type</Label>
+            <Select id="client_type" {...register("client_type")}>
+              <option value="">— Select —</option>
+              <option value="Warehouse">Warehouse</option>
+              <option value="Transportation">Transportation</option>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="multi_location_charge">
+              Multiple-locations charge
+            </Label>
+            <Input
+              id="multi_location_charge"
+              type="number"
+              step="0.01"
+              min="0"
+              {...register("multi_location_charge")}
+              placeholder="0"
+            />
+            <p className="text-xs text-muted-foreground">
+              Fixed charge added per extra delivery stop.
+            </p>
           </div>
         </div>
         <div className="space-y-1.5">

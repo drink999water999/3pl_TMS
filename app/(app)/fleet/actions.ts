@@ -8,6 +8,8 @@ import {
   driverSchema,
   supplierSchema,
   driverLoginSchema,
+  supplierTruckSchema,
+  supplierRateSchema,
 } from "@/lib/validation";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -236,4 +238,114 @@ export async function resetDriverPassword(
   });
   if (error) return { error: error.message };
   return {};
+}
+
+// --- Supplier trucks (multiple per supplier) ----------------------------------
+export async function saveSupplierTruck(
+  supplierId: string,
+  input: unknown,
+  id?: string,
+): Promise<Result> {
+  const parsed = supplierTruckSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const supabase = await db();
+  const values = { ...parsed.data, supplier_id: supplierId };
+  const { error } = id
+    ? await supabase.from("supplier_trucks").update(values).eq("id", id)
+    : await supabase.from("supplier_trucks").insert(values);
+  if (error) return { error: error.message };
+  revalidatePath(`/fleet/suppliers/${supplierId}`);
+  return {};
+}
+
+export async function deleteSupplierTruck(
+  supplierId: string,
+  id: string,
+): Promise<Result> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("supplier_trucks")
+    .update({ deleted_at: nowIso(), is_active: false })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(`/fleet/suppliers/${supplierId}`);
+  return {};
+}
+
+// --- Supplier rates (matrix cost: service type x route) -----------------------
+export async function saveSupplierRate(
+  supplierId: string,
+  input: unknown,
+  id?: string,
+): Promise<Result> {
+  const parsed = supplierRateSchema.safeParse(input);
+  if (!parsed.success)
+    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
+  const supabase = await db();
+  const values = { ...parsed.data, supplier_id: supplierId };
+  const { error } = id
+    ? await supabase.from("supplier_rates").update(values).eq("id", id)
+    : await supabase.from("supplier_rates").insert(values);
+  if (error) return { error: error.message };
+  revalidatePath(`/fleet/suppliers/${supplierId}`);
+  return {};
+}
+
+export async function deleteSupplierRate(
+  supplierId: string,
+  id: string,
+): Promise<Result> {
+  const supabase = await db();
+  const { error } = await supabase
+    .from("supplier_rates")
+    .update({ deleted_at: nowIso(), is_active: false })
+    .eq("id", id);
+  if (error) return { error: error.message };
+  revalidatePath(`/fleet/suppliers/${supplierId}`);
+  return {};
+}
+
+// --- Excel import: suppliers --------------------------------------------------
+export async function importSuppliers(
+  rows: Record<string, string>[],
+): Promise<Result & { count?: number }> {
+  const supabase = await db();
+  const norm = (r: Record<string, string>) => {
+    const m: Record<string, string> = {};
+    for (const [k, v] of Object.entries(r))
+      m[k.trim().toLowerCase().replace(/\s+/g, "_")] = (v ?? "").toString().trim();
+    return m;
+  };
+  let count = 0;
+  for (const raw of rows) {
+    const r = norm(raw);
+    const name = r.name || r.supplier || r.supplier_name;
+    if (!name) continue;
+    const code = r.code || null;
+    const values = {
+      name,
+      code,
+      phone: r.phone || null,
+      email: r.email || null,
+      address: r.address || null,
+    };
+    let existing: { id: string } | null = null;
+    if (code) {
+      const { data } = await supabase
+        .from("suppliers")
+        .select("id")
+        .ilike("code", code)
+        .is("deleted_at", null)
+        .maybeSingle();
+      existing = data;
+    }
+    const { error } = existing
+      ? await supabase.from("suppliers").update(values).eq("id", existing.id)
+      : await supabase.from("suppliers").insert(values);
+    if (error) return { error: `Row "${name}": ${error.message}`, count };
+    count++;
+  }
+  revalidatePath("/fleet");
+  return { count };
 }

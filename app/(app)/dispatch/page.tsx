@@ -42,11 +42,13 @@ export default async function DispatchPage({
     suppliers,
     truckTypes,
     supplierTypes,
+    supplierTrucks,
+    supplierRates,
   ] = await Promise.all([
     supabase
       .from("transport_requests")
       .select(
-        "id, request_no, client_id, pickup_location_id, delivery_location_id, truck_type_id, delivery_date",
+        "id, request_no, client_id, pickup_location_id, delivery_location_id, truck_type_id, service_type_id, route_id, selling_price, delivery_date",
       )
       .eq("status", "Approved")
       .order("created_at"),
@@ -80,6 +82,16 @@ export default async function DispatchPage({
       .eq("is_active", true)
       .order("name"),
     supabase.from("supplier_truck_types").select("supplier_id, truck_type_id"),
+    supabase
+      .from("supplier_trucks")
+      .select(
+        "id, supplier_id, plate_number, driver_name, driver_id_no, driver_mobile, truck_type_id",
+      )
+      .is("deleted_at", null),
+    supabase
+      .from("supplier_rates")
+      .select("supplier_id, route_id, service_type_id, rate")
+      .is("deleted_at", null),
   ]);
 
   const clientName = (id: string | null) =>
@@ -107,6 +119,9 @@ export default async function DispatchPage({
     route: `${locName(r.pickup_location_id)} → ${locName(r.delivery_location_id)}`,
     truckType: typeName(r.truck_type_id),
     deliveryDate: r.delivery_date,
+    routeId: r.route_id,
+    serviceTypeId: r.service_type_id,
+    sellingPrice: r.selling_price,
   }));
 
   const board = (dispatches.data ?? []).map((d) => {
@@ -121,6 +136,9 @@ export default async function DispatchPage({
         d.assignment_type === "own"
           ? `${truckLabel(d.truck_id)} · ${driverName(d.driver_id)}`
           : `${supplierName(d.supplier_id)}${d.supplier_truck ? ` · ${d.supplier_truck}` : ""}`,
+      route: r
+        ? `${locName(r.pickup_location_id)} → ${locName(r.delivery_location_id)}`
+        : "—",
     };
   });
 
@@ -164,6 +182,8 @@ export default async function DispatchPage({
         suppliers={suppliers.data ?? []}
         truckTypes={truckTypes.data ?? []}
         supplierTypes={supplierTypes.data ?? []}
+        supplierTrucks={supplierTrucks.data ?? []}
+        supplierRates={supplierRates.data ?? []}
       />
     </div>
   );

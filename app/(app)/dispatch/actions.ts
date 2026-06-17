@@ -10,6 +10,7 @@ import {
 } from "@/lib/validation";
 import { nextDispatchStatus, type DispatchStatus } from "@/lib/dispatch";
 import { priceWaybill } from "@/lib/pricing-server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { TablesInsert } from "@/lib/database.types";
 
 type Result = { error?: string };
@@ -65,7 +66,7 @@ export async function createDispatch(
       truck_id: v.truck_id,
       driver_id: v.driver_id,
       truck_type_id: truck?.truck_type_id ?? v.truck_type_id,
-      carrier_cost: v.carrier_cost,
+      carrier_cost: null, // own fleet has no carrier cost
       customer_charge: v.customer_charge,
       notes: v.notes,
       created_by: uid,
@@ -77,6 +78,9 @@ export async function createDispatch(
       assignment_type: "outsourced",
       supplier_id: v.supplier_id,
       supplier_truck: v.supplier_truck,
+      supplier_truck_id: v.supplier_truck_id,
+      outsourced_driver_name: v.outsourced_driver_name,
+      outsourced_driver_id: v.outsourced_driver_id,
       truck_type_id: v.truck_type_id,
       carrier_cost: v.carrier_cost,
       customer_charge: v.customer_charge,
@@ -104,14 +108,57 @@ export async function advanceDispatch(
   id: string,
   expected: DispatchStatus,
   version: number,
+  opts: { actualTime?: string; poReference?: string } = {},
 ): Promise<Result> {
   const to = nextDispatchStatus(expected);
-  if (!to) return { error: "This dispatch is already delivered." };
+  if (!to) return { error: "This dispatch is already at its final stage." };
 
   const { supabase, uid } = await ctx();
+  const update: Record<string, unknown> = { status: to, updated_by: uid };
+
+  // Mandatory actual times.
+  if (to === "Picked Up") {
+    if (!opts.actualTime) return { error: "Enter the actual pick-up time." };
+    update.picked_up_at = new Date(opts.actualTime).toISOString();
+  }
+  if (to === "Delivered") {
+    if (!opts.actualTime) return { error: "Enter the actual delivery time." };
+    update.delivered_at = new Date(opts.actualTime).toISOString();
+  }
+  // Confirmation requires a PO / invoice / reference number.
+  if (to === "Confirmed") {
+    const { data: d } = await supabase
+      .from("dispatches")
+      .select("request_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (!d) return { error: "Dispatch not found." };
+    const { data: req } = await supabase
+      .from("transport_requests")
+      .select("po_reference")
+      .eq("id", d.request_id)
+      .maybeSingle();
+    const existingPo = (req?.po_reference ?? "").trim();
+    const newPo = (opts.poReference ?? "").trim();
+    if (!existingPo && !newPo)
+      return {
+        error: "A PO / invoice / reference number is required to confirm.",
+      };
+    if (!existingPo && newPo) {
+      // Dispatch role can't write transport_requests under RLS — use service role.
+      const admin = createAdminClient();
+      await admin
+        .from("transport_requests")
+        .update({ po_reference: newPo })
+        .eq("id", d.request_id);
+    }
+    update.confirmed_at = nowIso();
+    update.ready_for_billing = true;
+  }
+
   const { data, error } = await supabase
     .from("dispatches")
-    .update({ status: to, updated_by: uid })
+    .update(update)
     .eq("id", id)
     .eq("status", expected)
     .eq("version", version)
@@ -123,10 +170,8 @@ export async function advanceDispatch(
       error: "Dispatch was updated by someone else — refresh and retry.",
     };
 
-  // On Dispatched the trigger has just created the waybill — price it now. On
-  // Delivered we re-price so a completed shipment always lands in Finance (with
-  // a billing row, even if it still needs a price set).
-  if (to === "Dispatched" || to === "Delivered") {
+  // Price the waybill on the money-relevant transitions.
+  if (to === "Dispatched" || to === "Delivered" || to === "Confirmed") {
     const { data: wb } = await supabase
       .from("waybills")
       .select("id")

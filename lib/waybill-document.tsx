@@ -7,6 +7,7 @@ import {
   Page,
   View,
   Text,
+  Link,
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { Tables } from "@/lib/database.types";
@@ -150,7 +151,9 @@ export function waybillDocument({
           <Text style={styles.sectionTitle}>Address</Text>
           <View style={styles.sectionBody}>
             <View style={styles.row}>
-              <Field label="Client" value={waybill.client_name} />
+              <Field label="Sender" value={waybill.client_name} />
+              <Field label="Receiver" value={waybill.receiver_name} />
+              <Field label="PO / Reference" value={waybill.po_reference} />
             </View>
             <View style={styles.row}>
               <View style={styles.addressBox}>
@@ -164,6 +167,14 @@ export function waybillDocument({
                 <Text style={styles.fieldValue}>
                   {waybill.delivery_address || "—"}
                 </Text>
+                {waybill.delivery_maps_url ? (
+                  <Link
+                    src={waybill.delivery_maps_url}
+                    style={{ fontSize: 9, color: "#2b8fd6", marginTop: 2 }}
+                  >
+                    Open location in Google Maps
+                  </Link>
+                ) : null}
               </View>
             </View>
           </View>
@@ -214,32 +225,9 @@ export function waybillDocument({
               <Field label="Truck Number" value={waybill.truck_number} />
               <Field label="Truck Type" value={waybill.truck_type_name} />
               <Field label="Driver" value={waybill.driver_name} />
-              <Field label="Supplier" value={waybill.supplier_name} />
             </View>
           </View>
         </View>
-
-        {/* 5) Charges (client-facing freight amount) */}
-        {waybill.freight_amount != null ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Charges</Text>
-            <View style={styles.sectionBody}>
-              <View
-                style={[styles.row, { justifyContent: "space-between", marginBottom: 0 }]}
-              >
-                <Text style={{ fontFamily: "Helvetica-Bold", color: NAVY }}>
-                  Total freight charge
-                </Text>
-                <Text style={{ fontFamily: "Helvetica-Bold", color: NAVY }}>
-                  {formatMoney(
-                    waybill.freight_amount,
-                    waybill.currency ?? "SAR",
-                  )}
-                </Text>
-              </View>
-            </View>
-          </View>
-        ) : null}
 
         <View style={styles.footer} fixed>
           <Text>{appName}</Text>

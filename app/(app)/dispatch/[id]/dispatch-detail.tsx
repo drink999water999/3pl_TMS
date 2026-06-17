@@ -92,6 +92,7 @@ export function DispatchDetail({
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [flagging, setFlagging] = useState(false);
+  const [advanceFor, setAdvanceFor] = useState<string | null>(null);
   const [addingException, setAddingException] = useState(false);
 
   const status = dispatch.status;
@@ -142,9 +143,19 @@ export function DispatchDetail({
                   ? "Add a proof of delivery first"
                   : undefined
               }
-              onClick={() =>
-                run(() => advanceDispatch(dispatch.id, status, dispatch.version))
-              }
+              onClick={() => {
+                if (
+                  next === "Picked Up" ||
+                  next === "Delivered" ||
+                  next === "Confirmed"
+                ) {
+                  setAdvanceFor(next);
+                } else {
+                  run(() =>
+                    advanceDispatch(dispatch.id, status, dispatch.version),
+                  );
+                }
+              }}
             >
               Mark as {next} <ArrowRight className="h-4 w-4" />
             </Button>
@@ -184,6 +195,18 @@ export function DispatchDetail({
         <p className="mb-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
           {error}
         </p>
+      ) : null}
+
+      {advanceFor ? (
+        <AdvanceDialog
+          target={advanceFor}
+          onClose={() => setAdvanceFor(null)}
+          onSubmit={(opts) =>
+            run(() =>
+              advanceDispatch(dispatch.id, status, dispatch.version, opts),
+            )
+          }
+        />
       ) : null}
 
       {/* Stepper */}
@@ -245,6 +268,14 @@ export function DispatchDetail({
                 <Detail
                   label="Supplier truck"
                   value={dispatch.supplier_truck ?? "—"}
+                />
+                <Detail
+                  label="Driver"
+                  value={dispatch.outsourced_driver_name ?? "—"}
+                />
+                <Detail
+                  label="Driver ID"
+                  value={dispatch.outsourced_driver_id ?? "—"}
                 />
               </>
             )}
@@ -706,5 +737,76 @@ function DispatchPricingCard({ dispatch }: { dispatch: Dispatch }) {
         client&apos;s configured pricing.
       </p>
     </Card>
+  );
+}
+
+function AdvanceDialog({
+  target,
+  onClose,
+  onSubmit,
+}: {
+  target: string;
+  onClose: () => void;
+  onSubmit: (opts: {
+    actualTime?: string;
+    poReference?: string;
+  }) => void | Promise<void>;
+}) {
+  const needsTime = target === "Picked Up" || target === "Delivered";
+  const needsPo = target === "Confirmed";
+  const nowLocal = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
+  const [actualTime, setActualTime] = useState(needsTime ? nowLocal : "");
+  const [poRef, setPoRef] = useState("");
+
+  return (
+    <Dialog open onClose={onClose} title={`Mark as ${target}`}>
+      <div className="space-y-3">
+        {needsTime ? (
+          <div className="space-y-1.5">
+            <Label>
+              Actual {target === "Picked Up" ? "pick-up" : "delivery"} time
+            </Label>
+            <Input
+              type="datetime-local"
+              value={actualTime}
+              onChange={(e) => setActualTime(e.target.value)}
+            />
+          </div>
+        ) : null}
+        {needsPo ? (
+          <div className="space-y-1.5">
+            <Label>PO / Invoice / Reference number</Label>
+            <Input
+              value={poRef}
+              onChange={(e) => setPoRef(e.target.value)}
+              placeholder="Required if not already on the request"
+            />
+            <p className="text-xs text-muted-foreground">
+              Confirming requires a PO/invoice/reference. Leave blank only if one
+              is already recorded on the request.
+            </p>
+          </div>
+        ) : null}
+        <div className="flex justify-end gap-2 pt-1">
+          <Button type="button" variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              onSubmit({
+                actualTime: needsTime ? actualTime : undefined,
+                poReference: needsPo ? poRef : undefined,
+              });
+              onClose();
+            }}
+          >
+            Confirm
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
