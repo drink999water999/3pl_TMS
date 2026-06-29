@@ -37,7 +37,6 @@ export function SupplierDetail({
   supplier,
   trucks,
   rates,
-  truckTypes,
   serviceTypes,
   routeOptions,
   canEdit,
@@ -45,7 +44,6 @@ export function SupplierDetail({
   supplier: Supplier;
   trucks: SupplierTruck[];
   rates: SupplierRate[];
-  truckTypes: Lookup[];
   serviceTypes: Lookup[];
   routeOptions: RouteOption[];
   canEdit: boolean;
@@ -97,7 +95,7 @@ export function SupplierDetail({
               <TH>Driver</TH>
               <TH>Driver ID</TH>
               <TH>Mobile</TH>
-              <TH>Truck type</TH>
+              <TH>Service type</TH>
               <TH></TH>
             </TR>
           </THead>
@@ -111,7 +109,7 @@ export function SupplierDetail({
                   <TD>{t.driver_name ?? "—"}</TD>
                   <TD>{t.driver_id_no ?? "—"}</TD>
                   <TD>{t.driver_mobile ?? "—"}</TD>
-                  <TD>{nameById(truckTypes, t.truck_type_id)}</TD>
+                  <TD>{nameById(serviceTypes, t.service_type_id)}</TD>
                   <TD className="text-right">
                     {canEdit ? (
                       <RowActions
@@ -152,9 +150,7 @@ export function SupplierDetail({
               rates.map((r) => (
                 <TR key={r.id}>
                   <TD className="font-medium">
-                    {r.service_type_id
-                      ? nameById(serviceTypes, r.service_type_id)
-                      : nameById(truckTypes, r.truck_type_id)}
+                    {nameById(serviceTypes, r.service_type_id)}
                   </TD>
                   <TD>{r.route_id ? routeLabel(r.route_id) : r.lane ?? "—"}</TD>
                   <TD className="font-medium">
@@ -182,7 +178,6 @@ export function SupplierDetail({
         <TruckDialog
           supplierId={supplier.id}
           truck={truck === "new" ? undefined : truck}
-          truckTypes={truckTypes}
           serviceTypes={serviceTypes}
           onClose={() => setTruck(null)}
         />
@@ -339,13 +334,11 @@ function Field({
 function TruckDialog({
   supplierId,
   truck,
-  truckTypes,
   serviceTypes,
   onClose,
 }: {
   supplierId: string;
   truck?: SupplierTruck;
-  truckTypes: Lookup[];
   serviceTypes: Lookup[];
   onClose: () => void;
 }) {
@@ -356,7 +349,6 @@ function TruckDialog({
       driver_name: truck?.driver_name ?? "",
       driver_id_no: truck?.driver_id_no ?? "",
       driver_mobile: truck?.driver_mobile ?? "",
-      truck_type_id: truck?.truck_type_id ?? "",
       service_type_id: truck?.service_type_id ?? "",
       is_active: truck?.is_active ?? true,
     },
@@ -393,16 +385,6 @@ function TruckDialog({
         <Field label="Driver mobile">
           <Input {...register("driver_mobile")} />
         </Field>
-        <Field label="Truck type">
-          <Select {...register("truck_type_id")}>
-            <option value="">— Select —</option>
-            {truckTypes.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </Select>
-        </Field>
         <Field label="Service type">
           <Select {...register("service_type_id")}>
             <option value="">— Select —</option>
@@ -436,7 +418,6 @@ function RateDialog({
     defaultValues: {
       service_type_id: rate?.service_type_id ?? "",
       route_id: rate?.route_id ?? "",
-      truck_type_id: rate?.truck_type_id ?? "",
       lane: rate?.lane ?? "",
       rate: rate?.rate?.toString() ?? "",
       currency: rate?.currency ?? "SAR",
@@ -461,7 +442,6 @@ function RateDialog({
       saving={saving}
       error={error}
     >
-      <input type="hidden" {...register("truck_type_id")} />
       <input type="hidden" {...register("lane")} />
       <Field label="Service type">
         <Select {...register("service_type_id")}>

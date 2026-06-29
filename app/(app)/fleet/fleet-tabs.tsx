@@ -32,7 +32,7 @@ type Truck = Tables<"trucks">;
 type Driver = Tables<"drivers">;
 type Supplier = Tables<"suppliers">;
 type Lookup = { id: string; name: string };
-type SupplierType = { supplier_id: string; truck_type_id: string };
+type SupplierType = { supplier_id: string; service_type_id: string };
 export type DriverLogin = { email: string; active: boolean };
 
 type Tab = "trucks" | "drivers" | "suppliers";
@@ -44,7 +44,7 @@ export function FleetTabs({
   trucks,
   drivers,
   suppliers,
-  truckTypes,
+  serviceTypes,
   supplierTypes,
   cities,
   driverLogins,
@@ -53,7 +53,7 @@ export function FleetTabs({
   trucks: Truck[];
   drivers: Driver[];
   suppliers: Supplier[];
-  truckTypes: Lookup[];
+  serviceTypes: Lookup[];
   supplierTypes: SupplierType[];
   cities: Lookup[];
   driverLogins: Record<string, DriverLogin>;
@@ -67,13 +67,13 @@ export function FleetTabs({
   const router = useRouter();
 
   const typeName = (id: string | null) =>
-    truckTypes.find((t) => t.id === id)?.name ?? "—";
+    serviceTypes.find((t) => t.id === id)?.name ?? "—";
   const driverName = (id: string | null) =>
     drivers.find((d) => d.id === id)?.name ?? "—";
   const typesForSupplier = (sid: string) =>
     supplierTypes
       .filter((s) => s.supplier_id === sid)
-      .map((s) => typeName(s.truck_type_id));
+      .map((s) => typeName(s.service_type_id));
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "trucks", label: "Trucks", count: trucks.length },
@@ -135,7 +135,7 @@ export function FleetTabs({
                 <TR key={t.id}>
                   <TD className="font-medium">{t.code}</TD>
                   <TD>{t.plate_number}</TD>
-                  <TD>{typeName(t.truck_type_id)}</TD>
+                  <TD>{typeName(t.service_type_id)}</TD>
                   <TD>
                     {t.capacity ? `${t.capacity} ${t.capacity_unit ?? ""}` : "—"}
                   </TD>
@@ -245,7 +245,7 @@ export function FleetTabs({
               <TH>Name</TH>
               <TH>Code</TH>
               <TH>Phone</TH>
-              <TH>Truck types</TH>
+              <TH>Service types</TH>
               <TH>Status</TH>
               <TH></TH>
             </TR>
@@ -295,7 +295,7 @@ export function FleetTabs({
       {truck ? (
         <TruckDialog
           truck={truck === "new" ? undefined : truck}
-          truckTypes={truckTypes}
+          serviceTypes={serviceTypes}
           drivers={drivers}
           cities={cities}
           onClose={() => setTruck(null)}
@@ -317,13 +317,13 @@ export function FleetTabs({
       {supplier ? (
         <SupplierDialog
           supplier={supplier === "new" ? undefined : supplier}
-          truckTypes={truckTypes}
+          serviceTypes={serviceTypes}
           initialTypeIds={
             supplier === "new"
               ? []
               : supplierTypes
                   .filter((st) => st.supplier_id === supplier.id)
-                  .map((st) => st.truck_type_id)
+                  .map((st) => st.service_type_id)
           }
           onClose={() => setSupplier(null)}
         />
@@ -433,13 +433,13 @@ function Field({
 
 function TruckDialog({
   truck,
-  truckTypes,
+  serviceTypes,
   drivers,
   cities,
   onClose,
 }: {
   truck?: Truck;
-  truckTypes: Lookup[];
+  serviceTypes: Lookup[];
   drivers: Driver[];
   cities: Lookup[];
   onClose: () => void;
@@ -449,7 +449,7 @@ function TruckDialog({
     defaultValues: {
       code: truck?.code ?? "",
       plate_number: truck?.plate_number ?? "",
-      truck_type_id: truck?.truck_type_id ?? "",
+      service_type_id: truck?.service_type_id ?? "",
       current_city_id: truck?.current_city_id ?? "",
       capacity: truck?.capacity?.toString() ?? "",
       capacity_unit: truck?.capacity_unit ?? "kg",
@@ -484,10 +484,10 @@ function TruckDialog({
         <Field label="Plate number">
           <Input {...register("plate_number", { required: true })} />
         </Field>
-        <Field label="Truck type">
-          <Select {...register("truck_type_id")}>
+        <Field label="Service type">
+          <Select {...register("service_type_id")}>
             <option value="">— None —</option>
-            {truckTypes.map((t) => (
+            {serviceTypes.map((t) => (
               <option key={t.id} value={t.id}>
                 {t.name}
               </option>
@@ -599,12 +599,12 @@ function DriverDialog({
 
 function SupplierDialog({
   supplier,
-  truckTypes,
+  serviceTypes,
   initialTypeIds,
   onClose,
 }: {
   supplier?: Supplier;
-  truckTypes: Lookup[];
+  serviceTypes: Lookup[];
   initialTypeIds: string[];
   onClose: () => void;
 }) {
@@ -633,7 +633,7 @@ function SupplierDialog({
     setSaving(true);
     setError(null);
     const res = await saveSupplier(
-      { ...values, truck_type_ids: typeIds },
+      { ...values, service_type_ids: typeIds },
       supplier?.id,
     );
     setSaving(false);
@@ -673,9 +673,9 @@ function SupplierDialog({
         <Textarea {...register("address")} />
       </Field>
       <div className="space-y-1.5">
-        <Label>Truck types offered</Label>
+        <Label>Service types offered</Label>
         <div className="flex flex-wrap gap-2">
-          {truckTypes.map((t) => (
+          {serviceTypes.map((t) => (
             <label
               key={t.id}
               className={cn(

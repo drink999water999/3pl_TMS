@@ -9,7 +9,7 @@ export default async function SetupPage() {
   await requireRole(["admin"]);
   const supabase = await createClient();
 
-  const [cities, routes, serviceTypes, truckTypes, standardRates] =
+  const [cities, routes, serviceTypes, standardRates] =
     await Promise.all([
     supabase.from("cities").select("*").is("deleted_at", null).order("name"),
     supabase
@@ -22,11 +22,6 @@ export default async function SetupPage() {
       .select("*")
       .is("deleted_at", null)
       .order("sort_order"),
-    supabase
-      .from("truck_types")
-      .select("*")
-      .is("deleted_at", null)
-      .order("name"),
     supabase
       .from("standard_rates")
       .select("*")
@@ -44,7 +39,6 @@ export default async function SetupPage() {
         cities={cities.data ?? []}
         routes={routes.data ?? []}
         serviceTypes={serviceTypes.data ?? []}
-        truckTypes={truckTypes.data ?? []}
         standardRates={standardRates.data ?? []}
       />
     </div>

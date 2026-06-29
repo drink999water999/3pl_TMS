@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app/page-header";
-import { ReportsView, type Report } from "./reports-view";
+import { ReportsView, type DeliveryRow, type Option } from "./reports-view";
 
 export const metadata = { title: "Reports" };
 
@@ -16,25 +16,33 @@ export default async function ReportsPage() {
     trucksRes,
     driversRes,
     suppliersRes,
+    serviceTypesRes,
     locationsRes,
     citiesRes,
     waybillsRes,
+    billingRes,
   ] = await Promise.all([
     supabase
       .from("dispatches")
       .select(
-        "id, status, truck_id, driver_id, supplier_id, supplier_truck, outsourced_driver_name, request_id, delivered_at, carrier_cost",
+        "id, status, truck_id, driver_id, supplier_id, supplier_truck, outsourced_driver_name, service_type_id, request_id, delivered_at, dispatched_at, carrier_cost, created_at",
       ),
     supabase
       .from("transport_requests")
-      .select("id, client_id, delivery_location_id"),
+      .select(
+        "id, request_no, client_id, pickup_location_id, delivery_location_id, service_type_id, delivery_date, created_at",
+      ),
     supabase.from("clients").select("id, name, client_type"),
     supabase.from("trucks").select("id, code, plate_number"),
     supabase.from("drivers").select("id, name"),
     supabase.from("suppliers").select("id, name"),
-    supabase.from("locations").select("id, city_id"),
+    supabase.from("service_types").select("id, name"),
+    supabase.from("locations").select("id, name, city_id"),
     supabase.from("cities").select("id, name"),
-    supabase.from("waybills").select("dispatch_id, freight_amount"),
+    supabase.from("waybills").select("id, dispatch_id, freight_amount"),
+    supabase
+      .from("waybill_billing")
+      .select("waybill_id, freight_amount, carrier_cost, margin_amount"),
   ]);
 
   const dispatches = dispatchesRes.data ?? [];
@@ -43,108 +51,124 @@ export default async function ReportsPage() {
   const truckById = new Map((trucksRes.data ?? []).map((t) => [t.id, t]));
   const driverById = new Map((driversRes.data ?? []).map((d) => [d.id, d]));
   const supplierById = new Map((suppliersRes.data ?? []).map((s) => [s.id, s]));
-  const locCity = new Map((locationsRes.data ?? []).map((l) => [l.id, l.city_id]));
+  const serviceById = new Map(
+    (serviceTypesRes.data ?? []).map((s) => [s.id, s.name]),
+  );
+  const locById = new Map((locationsRes.data ?? []).map((l) => [l.id, l]));
   const cityName = new Map((citiesRes.data ?? []).map((c) => [c.id, c.name]));
-  const freightByDispatch = new Map(
-    (waybillsRes.data ?? []).map((w) => [w.dispatch_id, w.freight_amount]),
+  // Authoritative billing (freight / carrier cost / margin) is keyed by waybill;
+  // map it back to the dispatch so each delivery row can use it.
+  const billingByWaybill = new Map(
+    (billingRes.data ?? []).map((b) => [b.waybill_id, b]),
+  );
+  const billingByDispatch = new Map(
+    (waybillsRes.data ?? []).map((w) => [
+      w.dispatch_id,
+      {
+        waybillFreight: w.freight_amount,
+        billing: billingByWaybill.get(w.id) ?? null,
+      },
+    ]),
   );
 
-  // Completed shipments = Delivered or Confirmed.
-  const delivered = dispatches.filter(
-    (d) => d.status === "Delivered" || d.status === "Confirmed",
+  // Resolve a location to its city name (falls back to the location name).
+  const placeOf = (locId: string | null) => {
+    if (!locId) return "—";
+    const loc = locById.get(locId);
+    if (!loc) return "—";
+    const city = loc.city_id ? cityName.get(loc.city_id) : null;
+    return city ?? loc.name ?? "—";
+  };
+
+  // Build one row per dispatch, denormalised for filtering + display.
+  const rows: DeliveryRow[] = dispatches.map((d) => {
+    const r = d.request_id ? reqById.get(d.request_id) : undefined;
+    const client = r?.client_id ? clientById.get(r.client_id) : undefined;
+    const truck = d.truck_id ? truckById.get(d.truck_id) : undefined;
+    const serviceTypeId = d.service_type_id ?? r?.service_type_id ?? null;
+
+    // Revenue / cost / margin: prefer the authoritative waybill_billing figures,
+    // falling back to the waybill freight + dispatch carrier cost.
+    const bill = billingByDispatch.get(d.id);
+    const revenue =
+      bill?.billing?.freight_amount ?? bill?.waybillFreight ?? 0;
+    const cost = bill?.billing?.carrier_cost ?? d.carrier_cost ?? 0;
+    const margin = bill?.billing?.margin_amount ?? revenue - cost;
+    return {
+      dispatchId: d.id,
+      requestNo: r?.request_no ?? "—",
+      status: d.status,
+      orderDate: r?.delivery_date ?? r?.created_at?.slice(0, 10) ?? null,
+      deliveredDate: d.delivered_at ? d.delivered_at.slice(0, 10) : null,
+      dispatchedDate: d.dispatched_at ? d.dispatched_at.slice(0, 10) : null,
+      truckId: d.truck_id ?? null,
+      truckLabel: truck
+        ? `${truck.code} · ${truck.plate_number}`
+        : d.supplier_truck
+          ? `${d.supplier_truck} (outsourced)`
+          : "Outsourced",
+      serviceTypeId,
+      serviceType: serviceTypeId ? (serviceById.get(serviceTypeId) ?? "—") : "—",
+      from: placeOf(r?.pickup_location_id ?? null),
+      to: placeOf(r?.delivery_location_id ?? null),
+      clientId: r?.client_id ?? null,
+      client: client?.name ?? "—",
+      clientType: client?.client_type ?? "Unspecified",
+      driverId: d.driver_id ?? null,
+      driver: d.driver_id
+        ? (driverById.get(d.driver_id)?.name ?? "—")
+        : (d.outsourced_driver_name ?? "—"),
+      supplierId: d.supplier_id ?? null,
+      supplier: d.supplier_id
+        ? (supplierById.get(d.supplier_id)?.name ?? "—")
+        : "Own fleet",
+      revenue,
+      cost,
+      margin,
+    };
+  });
+
+  // Filter dropdown options (only values that actually appear).
+  const optionsFrom = (
+    list: { id: string | null; name: string }[],
+  ): Option[] => {
+    const seen = new Map<string, string>();
+    for (const x of list) if (x.id) seen.set(x.id, x.name);
+    return Array.from(seen.entries())
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  };
+
+  const driverOptions = optionsFrom(
+    rows.map((r) => ({ id: r.driverId, name: r.driver })),
   );
-
-  type Agg = { count: number; revenue: number };
-  const group = (keyFn: (d: (typeof delivered)[number]) => string) => {
-    const m = new Map<string, Agg>();
-    for (const d of delivered) {
-      const key = keyFn(d) || "—";
-      const a = m.get(key) ?? { count: 0, revenue: 0 };
-      a.count++;
-      a.revenue += freightByDispatch.get(d.id) ?? 0;
-      m.set(key, a);
-    }
-    return Array.from(m.entries())
-      .map(([label, a]) => [label, a.count, Math.round(a.revenue)] as (string | number)[])
-      .sort((x, y) => Number(y[1]) - Number(x[1]));
-  };
-
-  const truckLabel = (d: (typeof delivered)[number]) => {
-    if (d.truck_id) {
-      const t = truckById.get(d.truck_id);
-      return t ? `${t.code} · ${t.plate_number}` : "Own truck";
-    }
-    return d.supplier_truck ? `${d.supplier_truck} (outsourced)` : "Outsourced";
-  };
-  const driverLabel = (d: (typeof delivered)[number]) =>
-    d.driver_id
-      ? driverById.get(d.driver_id)?.name ?? "—"
-      : d.outsourced_driver_name ?? "—";
-  const clientLabel = (d: (typeof delivered)[number]) => {
-    const r = reqById.get(d.request_id);
-    return r ? clientById.get(r.client_id)?.name ?? "—" : "—";
-  };
-  const clientTypeLabel = (d: (typeof delivered)[number]) => {
-    const r = reqById.get(d.request_id);
-    return (r ? clientById.get(r.client_id)?.client_type : null) ?? "Unspecified";
-  };
-  const supplierLabel = (d: (typeof delivered)[number]) =>
-    d.supplier_id ? supplierById.get(d.supplier_id)?.name ?? "—" : "Own fleet";
-  const areaLabel = (d: (typeof delivered)[number]) => {
-    const r = reqById.get(d.request_id);
-    const cid = r?.delivery_location_id ? locCity.get(r.delivery_location_id) : null;
-    return cid ? cityName.get(cid) ?? "—" : "Unassigned";
-  };
-
-  // Month closing statement.
-  const monthMap = new Map<
-    string,
-    { count: number; revenue: number; cost: number }
-  >();
-  for (const d of delivered) {
-    if (!d.delivered_at) continue;
-    const month = d.delivered_at.slice(0, 7);
-    const m = monthMap.get(month) ?? { count: 0, revenue: 0, cost: 0 };
-    m.count++;
-    m.revenue += freightByDispatch.get(d.id) ?? 0;
-    m.cost += d.carrier_cost ?? 0;
-    monthMap.set(month, m);
-  }
-  const monthRows = Array.from(monthMap.entries())
-    .sort((a, b) => b[0].localeCompare(a[0]))
-    .map(
-      ([month, m]) =>
-        [
-          month,
-          m.count,
-          Math.round(m.revenue),
-          Math.round(m.cost),
-          Math.round(m.revenue - m.cost),
-        ] as (string | number)[],
-    );
-
-  const reports: Report[] = [
-    { id: "truck", label: "Deliveries per truck", columns: ["Truck", "Deliveries", "Revenue"], rows: group(truckLabel) },
-    { id: "driver", label: "Deliveries per driver", columns: ["Driver", "Deliveries", "Revenue"], rows: group(driverLabel) },
-    { id: "client", label: "Deliveries per client", columns: ["Client", "Deliveries", "Revenue"], rows: group(clientLabel) },
-    { id: "supplier", label: "Deliveries per supplier", columns: ["Supplier", "Deliveries", "Revenue"], rows: group(supplierLabel) },
-    { id: "clientType", label: "Deliveries per client type", columns: ["Client type", "Deliveries", "Revenue"], rows: group(clientTypeLabel) },
-    { id: "area", label: "Deliveries per area", columns: ["Area / city", "Deliveries", "Revenue"], rows: group(areaLabel) },
-    {
-      id: "month",
-      label: "Month closing statement",
-      columns: ["Month", "Deliveries", "Revenue", "Carrier cost", "Margin"],
-      rows: monthRows,
-    },
-  ];
+  const clientOptions = optionsFrom(
+    rows.map((r) => ({ id: r.clientId, name: r.client })),
+  );
+  const supplierOptions = optionsFrom(
+    rows.map((r) => ({ id: r.supplierId, name: r.supplier })),
+  );
+  const serviceTypeOptions = optionsFrom(
+    rows.map((r) => ({ id: r.serviceTypeId, name: r.serviceType })),
+  );
+  const statusOptions = Array.from(new Set(rows.map((r) => r.status)))
+    .sort()
+    .map((s) => ({ value: s, label: s }));
 
   return (
     <div>
       <PageHeader
         title="Reports"
-        description="Delivery performance and month-end summaries. Export any view to CSV."
+        description="Filter every delivery by date, driver, client, supplier, service type and status. Switch between the detailed log and summary breakdowns, and export any view to CSV."
       />
-      <ReportsView reports={reports} />
+      <ReportsView
+        rows={rows}
+        driverOptions={driverOptions}
+        clientOptions={clientOptions}
+        supplierOptions={supplierOptions}
+        serviceTypeOptions={serviceTypeOptions}
+        statusOptions={statusOptions}
+      />
     </div>
   );
 }

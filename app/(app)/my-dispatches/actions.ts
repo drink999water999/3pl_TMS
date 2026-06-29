@@ -17,6 +17,9 @@ export async function driverAdvanceDispatch(
 ): Promise<Result> {
   const to = nextDispatchStatus(expected);
   if (!to) return { error: "This delivery is already complete." };
+  // Drivers complete the journey at "Delivered" — only office staff confirm.
+  if (to === "Confirmed")
+    return { error: "Delivered. Confirmation is handled by the office." };
 
   const { profile } = await requireRole(["driver"]);
   const supabase = await createClient();

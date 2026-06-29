@@ -183,7 +183,7 @@ export function ClientDialog({
             ) : (
               <p className="sm:col-span-2 text-xs text-muted-foreground">
                 Fixed mode bills the contract rate for the lane (per destination
-                + truck type) you add under this client. Only the selected
+                + service type) you add under this client. Only the selected
                 method applies &mdash; the per-km fields are ignored in Fixed
                 mode, and contract rates are ignored in By-distance mode.
               </p>

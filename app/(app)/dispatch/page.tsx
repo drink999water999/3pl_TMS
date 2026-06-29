@@ -40,7 +40,7 @@ export default async function DispatchPage({
     trucks,
     drivers,
     suppliers,
-    truckTypes,
+    serviceTypes,
     supplierTypes,
     supplierTrucks,
     supplierRates,
@@ -48,7 +48,7 @@ export default async function DispatchPage({
     supabase
       .from("transport_requests")
       .select(
-        "id, request_no, client_id, pickup_location_id, delivery_location_id, truck_type_id, service_type_id, route_id, selling_price, delivery_date",
+        "id, request_no, client_id, pickup_location_id, delivery_location_id, service_type_id, route_id, selling_price, delivery_date",
       )
       .eq("status", "Approved")
       .order("created_at"),
@@ -60,7 +60,7 @@ export default async function DispatchPage({
     supabase.from("locations").select("id, name"),
     supabase
       .from("trucks")
-      .select("id, code, plate_number, truck_type_id, default_driver_id")
+      .select("id, code, plate_number, service_type_id, default_driver_id")
       .is("deleted_at", null)
       .eq("is_active", true)
       .order("code"),
@@ -77,15 +77,17 @@ export default async function DispatchPage({
       .eq("is_active", true)
       .order("name"),
     supabase
-      .from("truck_types")
+      .from("service_types")
       .select("id, name")
       .eq("is_active", true)
-      .order("name"),
-    supabase.from("supplier_truck_types").select("supplier_id, truck_type_id"),
+      .order("sort_order"),
+    supabase
+      .from("supplier_service_types")
+      .select("supplier_id, service_type_id"),
     supabase
       .from("supplier_trucks")
       .select(
-        "id, supplier_id, plate_number, driver_name, driver_id_no, driver_mobile, truck_type_id",
+        "id, supplier_id, plate_number, driver_name, driver_id_no, driver_mobile, service_type_id",
       )
       .is("deleted_at", null),
     supabase
@@ -99,7 +101,7 @@ export default async function DispatchPage({
   const locName = (id: string | null) =>
     id ? (locations.data?.find((l) => l.id === id)?.name ?? "—") : "—";
   const typeName = (id: string | null) =>
-    id ? (truckTypes.data?.find((t) => t.id === id)?.name ?? "—") : "—";
+    id ? (serviceTypes.data?.find((t) => t.id === id)?.name ?? "—") : "—";
   const truckLabel = (id: string | null) => {
     const t = trucks.data?.find((x) => x.id === id);
     return t ? `${t.code} · ${t.plate_number}` : "—";
@@ -117,7 +119,7 @@ export default async function DispatchPage({
     request_no: r.request_no,
     client: clientName(r.client_id),
     route: `${locName(r.pickup_location_id)} → ${locName(r.delivery_location_id)}`,
-    truckType: typeName(r.truck_type_id),
+    serviceType: typeName(r.service_type_id),
     deliveryDate: r.delivery_date,
     routeId: r.route_id,
     serviceTypeId: r.service_type_id,
@@ -174,13 +176,13 @@ export default async function DispatchPage({
         trucks={(trucks.data ?? []).map((t) => ({
           id: t.id,
           label: `${t.code} · ${t.plate_number}`,
-          truck_type_id: t.truck_type_id,
-          truck_type: typeName(t.truck_type_id),
+          service_type_id: t.service_type_id,
+          service_type: typeName(t.service_type_id),
           default_driver_id: t.default_driver_id,
         }))}
         drivers={drivers.data ?? []}
         suppliers={suppliers.data ?? []}
-        truckTypes={truckTypes.data ?? []}
+        serviceTypes={serviceTypes.data ?? []}
         supplierTypes={supplierTypes.data ?? []}
         supplierTrucks={supplierTrucks.data ?? []}
         supplierRates={supplierRates.data ?? []}

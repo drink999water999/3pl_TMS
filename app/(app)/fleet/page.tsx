@@ -13,7 +13,7 @@ export default async function FleetPage() {
   const canEdit = profile.role === "admin";
   const supabase = await createClient();
 
-  const [trucks, drivers, suppliers, truckTypes, supplierTypes, cities] =
+  const [trucks, drivers, suppliers, serviceTypes, supplierTypes, cities] =
     await Promise.all([
       supabase.from("trucks").select("*").is("deleted_at", null).order("code"),
       supabase.from("drivers").select("*").is("deleted_at", null).order("name"),
@@ -23,11 +23,13 @@ export default async function FleetPage() {
         .is("deleted_at", null)
         .order("name"),
       supabase
-        .from("truck_types")
+        .from("service_types")
         .select("id, name")
         .eq("is_active", true)
-        .order("name"),
-      supabase.from("supplier_truck_types").select("supplier_id, truck_type_id"),
+        .order("sort_order"),
+      supabase
+        .from("supplier_service_types")
+        .select("supplier_id, service_type_id"),
       supabase
         .from("cities")
         .select("id, name")
@@ -88,7 +90,7 @@ export default async function FleetPage() {
         trucks={trucks.data ?? []}
         drivers={drivers.data ?? []}
         suppliers={suppliers.data ?? []}
-        truckTypes={truckTypes.data ?? []}
+        serviceTypes={serviceTypes.data ?? []}
         supplierTypes={supplierTypes.data ?? []}
         cities={cities.data ?? []}
         driverLogins={driverLogins}

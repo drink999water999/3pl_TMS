@@ -12,7 +12,7 @@ export type ClientPricing = {
 
 export type ContractRate = {
   delivery_location_id: string | null;
-  truck_type_id: string | null;
+  service_type_id: string | null;
   shipment_type_id: string | null;
   rate: number;
   currency: string | null;
@@ -23,13 +23,13 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 /**
  * Pick the most specific contract rate that doesn't conflict with the lane.
  * A null column on the rate is a wildcard; specificity is scored so an exact
- * destination beats a truck-type-only rate, etc.
+ * destination beats a service-type-only rate, etc.
  */
 export function matchContractRate(
   rates: ContractRate[],
   lane: {
     deliveryId: string | null;
-    truckTypeId: string | null;
+    serviceTypeId: string | null;
     shipmentTypeId: string | null;
   },
 ): ContractRate | null {
@@ -38,12 +38,12 @@ export function matchContractRate(
   for (const r of rates) {
     if (r.delivery_location_id && r.delivery_location_id !== lane.deliveryId)
       continue;
-    if (r.truck_type_id && r.truck_type_id !== lane.truckTypeId) continue;
+    if (r.service_type_id && r.service_type_id !== lane.serviceTypeId) continue;
     if (r.shipment_type_id && r.shipment_type_id !== lane.shipmentTypeId)
       continue;
     const score =
       (r.delivery_location_id ? 4 : 0) +
-      (r.truck_type_id ? 2 : 0) +
+      (r.service_type_id ? 2 : 0) +
       (r.shipment_type_id ? 1 : 0);
     if (score > bestScore) {
       best = r;

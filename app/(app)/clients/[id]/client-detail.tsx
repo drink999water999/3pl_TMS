@@ -50,7 +50,6 @@ export function ClientDetail({
   contacts,
   locations,
   rates,
-  truckTypes,
   shipmentTypes,
   serviceTypes,
   cities,
@@ -62,7 +61,6 @@ export function ClientDetail({
   contacts: Contact[];
   locations: Location[];
   rates: Rate[];
-  truckTypes: Lookup[];
   shipmentTypes: Lookup[];
   serviceTypes: Lookup[];
   cities: Lookup[];
@@ -286,9 +284,7 @@ export function ClientDetail({
               rates.map((r) => (
                 <TR key={r.id}>
                   <TD className="font-medium">
-                    {r.service_type_id
-                      ? nameById(serviceTypes, r.service_type_id)
-                      : nameById(truckTypes, r.truck_type_id)}
+                    {nameById(serviceTypes, r.service_type_id)}
                   </TD>
                   <TD>
                     {routeLabel(r.route_id) ??
@@ -644,7 +640,6 @@ function RateDialog({
     defaultValues: {
       // legacy fields preserved so editing old rows doesn't drop them
       delivery_location_id: rate?.delivery_location_id ?? "",
-      truck_type_id: rate?.truck_type_id ?? "",
       service_type_id: rate?.service_type_id ?? "",
       route_id: rate?.route_id ?? "",
       shipment_type_id: rate?.shipment_type_id ?? "",
@@ -692,7 +687,6 @@ function RateDialog({
       error={error}
     >
       <input type="hidden" {...register("delivery_location_id")} />
-      <input type="hidden" {...register("truck_type_id")} />
       <div className="grid grid-cols-2 gap-3">
         <Field label="Service type">
           <Select {...register("service_type_id")}>

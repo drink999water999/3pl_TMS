@@ -45,6 +45,11 @@ type Stop = {
   receiver_name: string;
   receiver_phone: string;
 };
+type PickupStop = {
+  location_id: string | null;
+  contact_name: string;
+  contact_phone: string;
+};
 type ItemRow = {
   item_name: string;
   description: string;
@@ -63,6 +68,11 @@ const blankStop = (): Stop => ({
   receiver_name: "",
   receiver_phone: "",
 });
+const blankPickup = (): PickupStop => ({
+  location_id: null,
+  contact_name: "",
+  contact_phone: "",
+});
 
 export function RequestForm({
   mode,
@@ -70,13 +80,13 @@ export function RequestForm({
   clients,
   locations,
   shipmentTypes,
-  truckTypes,
   serviceTypes = [],
   cities = [],
   routes = [],
   contractRates = [],
   standardRates = [],
   deliveries = [],
+  pickupStops = [],
   multiLocationCharge = 0,
   clientMultiCharge = {},
   canSetPricing = false,
@@ -90,13 +100,13 @@ export function RequestForm({
   clients: Lookup[];
   locations: Loc[];
   shipmentTypes: Lookup[];
-  truckTypes: Lookup[];
   serviceTypes?: ServiceType[];
   cities?: Lookup[];
   routes?: RouteRow[];
   contractRates?: ContractRate[];
   standardRates?: ContractRate[];
   deliveries?: { location_id: string | null; receiver_name: string | null; receiver_phone: string | null }[];
+  pickupStops?: { location_id: string | null; contact_name: string | null; contact_phone: string | null }[];
   multiLocationCharge?: number;
   clientMultiCharge?: Record<string, number>;
   canSetPricing?: boolean;
@@ -110,8 +120,20 @@ export function RequestForm({
   const [clientId, setClientId] = useState<string | null>(
     request?.client_id ?? lockClientId ?? null,
   );
-  const [pickupId, setPickupId] = useState<string | null>(
-    request?.pickup_location_id ?? null,
+  const [pickups, setPickups] = useState<PickupStop[]>(
+    pickupStops.length > 0
+      ? pickupStops.map((p) => ({
+          location_id: p.location_id,
+          contact_name: p.contact_name ?? "",
+          contact_phone: p.contact_phone ?? "",
+        }))
+      : [
+          {
+            location_id: request?.pickup_location_id ?? null,
+            contact_name: "",
+            contact_phone: "",
+          },
+        ],
   );
   const [stops, setStops] = useState<Stop[]>(
     deliveries.length > 0
@@ -137,7 +159,6 @@ export function RequestForm({
       shipment_type_id: request?.shipment_type_id ?? "",
       service_type_id: request?.service_type_id ?? "",
       route_id: request?.route_id ?? "",
-      truck_type_id: request?.truck_type_id ?? "",
       quantity: request?.quantity?.toString() ?? "",
       weight: request?.weight?.toString() ?? "",
       pallets: request?.pallets?.toString() ?? "",
@@ -177,7 +198,7 @@ export function RequestForm({
 
   const onClientChange = (id: string | null) => {
     setClientId(id);
-    setPickupId(null);
+    setPickups([blankPickup()]);
     setStops([blankStop()]);
   };
 
@@ -188,17 +209,20 @@ export function RequestForm({
 
   // --- Auto route + distance from pickup city → first delivery city -------------
   const firstDeliveryId = stops[0]?.location_id ?? null;
+  const firstPickupId = pickups[0]?.location_id ?? null;
   const matchedRoute = useMemo(() => {
     const toCityId = firstDeliveryId
       ? locById.get(firstDeliveryId)?.city_id ?? null
       : null;
-    const fromCityId = pickupId ? locById.get(pickupId)?.city_id ?? null : null;
+    const fromCityId = firstPickupId
+      ? locById.get(firstPickupId)?.city_id ?? null
+      : null;
     if (!fromCityId || !toCityId) return null;
     return routes.find(
       (r) => r.from_city_id === fromCityId && r.to_city_id === toCityId,
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pickupId, firstDeliveryId, routes, locById]);
+  }, [firstPickupId, firstDeliveryId, routes, locById]);
 
   useEffect(() => {
     if (matchedRoute) {
@@ -272,6 +296,25 @@ export function RequestForm({
     );
   };
 
+  const setPickup = (i: number, patch: Partial<PickupStop>) =>
+    setPickups((prev) =>
+      prev.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+    );
+  const onPickupLocation = (i: number, locId: string | null) => {
+    const loc = locId ? locById.get(locId) : undefined;
+    setPickups((prev) =>
+      prev.map((row, idx) =>
+        idx === i
+          ? {
+              location_id: locId,
+              contact_name: row.contact_name || (loc?.receiver_name ?? ""),
+              contact_phone: row.contact_phone || (loc?.receiver_phone ?? ""),
+            }
+          : row,
+      ),
+    );
+  };
+
   const setItem = (i: number, patch: Partial<ItemRow>) =>
     setItems((prev) =>
       prev.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
@@ -280,6 +323,9 @@ export function RequestForm({
   const submit = handleSubmit(async (values) => {
     setError(null);
     if (!clientId) return setError("Select a client.");
+    const cleanPickups = pickups.filter((p) => p.location_id);
+    if (cleanPickups.length === 0)
+      return setError("Add at least one pickup location.");
     const cleanStops = stops.filter((s) => s.location_id);
     if (cleanStops.length === 0)
       return setError("Add at least one delivery location.");
@@ -287,11 +333,10 @@ export function RequestForm({
 
     const payload = {
       client_id: clientId,
-      pickup_location_id: pickupId,
+      pickup_location_id: cleanPickups[0].location_id, // primary pickup
       delivery_location_id: cleanStops[0].location_id, // primary stop
       shipment_type_id: values.shipment_type_id,
       service_type_id: values.service_type_id,
-      truck_type_id: values.truck_type_id,
       route_id: values.route_id,
       quantity: needsQuantity ? values.quantity : "",
       weight: values.weight,
@@ -313,15 +358,20 @@ export function RequestForm({
       receiver_name: s.receiver_name,
       receiver_phone: s.receiver_phone,
     }));
+    const pickupRows = cleanPickups.map((p) => ({
+      location_id: p.location_id,
+      contact_name: p.contact_name,
+      contact_phone: p.contact_phone,
+    }));
 
     if (mode === "create") {
       const cleanItems = items.filter((it) => it.item_name.trim());
-      const res = await createRequest(payload, cleanItems, stopRows);
+      const res = await createRequest(payload, cleanItems, stopRows, pickupRows);
       setSaving(false);
       if (res.error) return setError(res.error);
       if (res.id) router.push(`/requests/${res.id}`);
     } else if (request) {
-      const res = await updateRequest(request.id, payload, stopRows);
+      const res = await updateRequest(request.id, payload, stopRows, pickupRows);
       setSaving(false);
       if (res.error) return setError(res.error);
       onDone?.();
@@ -352,22 +402,6 @@ export function RequestForm({
             <Input {...register("po_reference")} placeholder="Optional" />
           </Field>
 
-          <Field label="Pickup location">
-            <SearchableSelect
-              options={pickupOptions}
-              value={pickupId}
-              onChange={setPickupId}
-              disabled={!clientId}
-              placeholder={clientId ? "Select pickup…" : "Pick a client first"}
-              emptyText="No pickup locations for this client"
-            />
-            {cityOf(pickupId) ? (
-              <p className="text-xs text-muted-foreground">
-                City: {cityOf(pickupId)}
-              </p>
-            ) : null}
-          </Field>
-
           <Field label="Service type">
             <Select {...register("service_type_id")}>
               <option value="">— None —</option>
@@ -389,16 +423,71 @@ export function RequestForm({
               ))}
             </Select>
           </Field>
-          <Field label="Preferred truck type (optional)">
-            <Select {...register("truck_type_id")}>
-              <option value="">— None —</option>
-              {truckTypes.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+        </div>
+
+        {/* Pickup stops (multi-pickup) */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label>Pickup locations</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!clientId}
+              onClick={() => setPickups((p) => [...p, blankPickup()])}
+            >
+              <Plus className="h-4 w-4" /> Add pickup
+            </Button>
+          </div>
+          {pickups.map((pk, i) => (
+            <div
+              key={i}
+              className="rounded-lg border bg-muted/20 p-3 space-y-2"
+            >
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-brand-navy">
+                  Pickup {i + 1}
+                  {cityOf(pk.location_id)
+                    ? ` · ${cityOf(pk.location_id)}`
+                    : ""}
+                </span>
+                {pickups.length > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPickups((p) => p.filter((_, idx) => idx !== i))
+                    }
+                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Remove pickup"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              <SearchableSelect
+                options={pickupOptions}
+                value={pk.location_id}
+                onChange={(v) => onPickupLocation(i, v)}
+                disabled={!clientId}
+                placeholder={clientId ? "Select pickup…" : "Pick a client first"}
+                emptyText="No pickup locations for this client"
+              />
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Input
+                  value={pk.contact_name}
+                  onChange={(e) => setPickup(i, { contact_name: e.target.value })}
+                  placeholder="Pickup contact name"
+                />
+                <Input
+                  value={pk.contact_phone}
+                  onChange={(e) =>
+                    setPickup(i, { contact_phone: e.target.value })
+                  }
+                  placeholder="Pickup contact phone"
+                />
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* Delivery stops (multi-stop) */}

@@ -4,9 +4,14 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate, requestStatusVariant } from "@/lib/format";
+import {
+  DataFilter,
+  matchesFilters,
+  ANY_COLUMN,
+  type ActiveFilter,
+} from "@/components/app/data-filter";
 
 export type RequestRow = {
   id: string;
@@ -32,30 +37,26 @@ const COLUMNS: { key: ColKey; label: string }[] = [
   { key: "status", label: "Status" },
 ];
 
+const getValue = (row: RequestRow, column: string) => {
+  if (column === ANY_COLUMN)
+    return COLUMNS.map((c) => String(row[c.key] ?? "")).join(" ");
+  return String(row[column as ColKey] ?? "");
+};
+
 export function RequestsTable({ rows }: { rows: RequestRow[] }) {
-  const [query, setQuery] = useState("");
+  const [filters, setFilters] = useState<ActiveFilter[]>([]);
   const [sortKey, setSortKey] = useState<ColKey>("request_no");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    let list = rows;
-    if (q) {
-      list = rows.filter((r) =>
-        COLUMNS.some((c) =>
-          String(r[c.key] ?? "")
-            .toLowerCase()
-            .includes(q),
-        ),
-      );
-    }
+    const list = rows.filter((r) => matchesFilters(r, filters, getValue));
     const sorted = [...list].sort((a, b) => {
       const av = String(a[sortKey] ?? "");
       const bv = String(b[sortKey] ?? "");
       return sortDir === "asc" ? av.localeCompare(bv) : bv.localeCompare(av);
     });
     return sorted;
-  }, [rows, query, sortKey, sortDir]);
+  }, [rows, filters, sortKey, sortDir]);
 
   const toggleSort = (key: ColKey) => {
     if (key === sortKey) {
@@ -68,12 +69,7 @@ export function RequestsTable({ rows }: { rows: RequestRow[] }) {
 
   return (
     <div className="space-y-3">
-      <Input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search across all columns…"
-        className="sm:max-w-md"
-      />
+      <DataFilter columns={COLUMNS} filters={filters} onChange={setFilters} />
       <Table>
         <THead>
           <TR>

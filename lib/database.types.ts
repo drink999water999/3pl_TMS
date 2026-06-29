@@ -21,6 +21,12 @@ export type Database = {
         Update: { id?: string; request_id?: string; location_id?: string | null; sequence?: number; receiver_name?: string | null; receiver_phone?: string | null; created_at?: string; updated_at?: string; };
         Relationships: [];
       };
+      request_pickups: {
+        Row: { id: string; request_id: string; location_id: string | null; sequence: number; contact_name: string | null; contact_phone: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; request_id: string; location_id?: string | null; sequence?: number; contact_name?: string | null; contact_phone?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; request_id?: string; location_id?: string | null; sequence?: number; contact_name?: string | null; contact_phone?: string | null; created_at?: string; updated_at?: string; };
+        Relationships: [];
+      };
       cities: {
         Row: { id: string; name: string; code: string | null; region: string | null; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
         Insert: { id?: string; name: string; code?: string | null; region?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
@@ -40,9 +46,9 @@ export type Database = {
         Relationships: [];
       };
       supplier_trucks: {
-        Row: { id: string; supplier_id: string; plate_number: string; driver_name: string | null; driver_id_no: string | null; driver_mobile: string | null; truck_type_id: string | null; service_type_id: string | null; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
-        Insert: { id?: string; supplier_id: string; plate_number: string; driver_name?: string | null; driver_id_no?: string | null; driver_mobile?: string | null; truck_type_id?: string | null; service_type_id?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
-        Update: { id?: string; supplier_id?: string; plate_number?: string; driver_name?: string | null; driver_id_no?: string | null; driver_mobile?: string | null; truck_type_id?: string | null; service_type_id?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Row: { id: string; supplier_id: string; plate_number: string; driver_name: string | null; driver_id_no: string | null; driver_mobile: string | null; service_type_id: string | null; is_active: boolean; deleted_at: string | null; created_at: string; updated_at: string; };
+        Insert: { id?: string; supplier_id: string; plate_number: string; driver_name?: string | null; driver_id_no?: string | null; driver_mobile?: string | null; service_type_id?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
+        Update: { id?: string; supplier_id?: string; plate_number?: string; driver_name?: string | null; driver_id_no?: string | null; driver_mobile?: string | null; service_type_id?: string | null; is_active?: boolean; deleted_at?: string | null; created_at?: string; updated_at?: string; };
         Relationships: [];
       };
       standard_rates: {
@@ -167,7 +173,6 @@ export type Database = {
           id: string;
           client_id: string;
           delivery_location_id: string | null;
-          truck_type_id: string | null;
           shipment_type_id: string | null;
           route_id: string | null;
           service_type_id: string | null;
@@ -184,7 +189,6 @@ export type Database = {
           id?: string;
           client_id: string;
           delivery_location_id?: string | null;
-          truck_type_id?: string | null;
           shipment_type_id?: string | null;
           route_id?: string | null;
           service_type_id?: string | null;
@@ -201,7 +205,6 @@ export type Database = {
           id?: string;
           client_id?: string;
           delivery_location_id?: string | null;
-          truck_type_id?: string | null;
           shipment_type_id?: string | null;
           route_id?: string | null;
           service_type_id?: string | null;
@@ -225,7 +228,7 @@ export type Database = {
           driver_id: string | null;
           supplier_id: string | null;
           supplier_truck: string | null;
-          truck_type_id: string | null;
+          service_type_id: string | null;
           status: Database["public"]["Enums"]["dispatch_status"];
           version: number;
           has_issue: boolean;
@@ -256,7 +259,7 @@ export type Database = {
           driver_id?: string | null;
           supplier_id?: string | null;
           supplier_truck?: string | null;
-          truck_type_id?: string | null;
+          service_type_id?: string | null;
           status?: Database["public"]["Enums"]["dispatch_status"];
           version?: number;
           has_issue?: boolean;
@@ -287,7 +290,7 @@ export type Database = {
           driver_id?: string | null;
           supplier_id?: string | null;
           supplier_truck?: string | null;
-          truck_type_id?: string | null;
+          service_type_id?: string | null;
           status?: Database["public"]["Enums"]["dispatch_status"];
           version?: number;
           has_issue?: boolean;
@@ -449,6 +452,7 @@ export type Database = {
           id: string;
           dispatch_id: string;
           kind: Database["public"]["Enums"]["pod_kind"];
+          stage: string;
           storage_path: string | null;
           note: string | null;
           uploaded_by: string | null;
@@ -458,6 +462,7 @@ export type Database = {
           id?: string;
           dispatch_id: string;
           kind: Database["public"]["Enums"]["pod_kind"];
+          stage?: string;
           storage_path?: string | null;
           note?: string | null;
           uploaded_by?: string | null;
@@ -467,6 +472,7 @@ export type Database = {
           id?: string;
           dispatch_id?: string;
           kind?: Database["public"]["Enums"]["pod_kind"];
+          stage?: string;
           storage_path?: string | null;
           note?: string | null;
           uploaded_by?: string | null;
@@ -610,7 +616,6 @@ export type Database = {
         Row: {
           id: string;
           supplier_id: string;
-          truck_type_id: string | null;
           lane: string | null;
           route_id: string | null;
           service_type_id: string | null;
@@ -624,7 +629,6 @@ export type Database = {
         Insert: {
           id?: string;
           supplier_id: string;
-          truck_type_id?: string | null;
           lane?: string | null;
           route_id?: string | null;
           service_type_id?: string | null;
@@ -638,7 +642,6 @@ export type Database = {
         Update: {
           id?: string;
           supplier_id?: string;
-          truck_type_id?: string | null;
           lane?: string | null;
           route_id?: string | null;
           service_type_id?: string | null;
@@ -651,20 +654,20 @@ export type Database = {
         };
         Relationships: [];
       };
-      supplier_truck_types: {
+      supplier_service_types: {
         Row: {
           supplier_id: string;
-          truck_type_id: string;
+          service_type_id: string;
           created_at: string;
         };
         Insert: {
           supplier_id: string;
-          truck_type_id: string;
+          service_type_id: string;
           created_at?: string;
         };
         Update: {
           supplier_id?: string;
-          truck_type_id?: string;
+          service_type_id?: string;
           created_at?: string;
         };
         Relationships: [];
@@ -722,7 +725,6 @@ export type Database = {
           pickup_location_id: string | null;
           delivery_location_id: string | null;
           shipment_type_id: string | null;
-          truck_type_id: string | null;
           quantity: number | null;
           weight: number | null;
           pallets: number | null;
@@ -754,7 +756,6 @@ export type Database = {
           pickup_location_id?: string | null;
           delivery_location_id?: string | null;
           shipment_type_id?: string | null;
-          truck_type_id?: string | null;
           quantity?: number | null;
           weight?: number | null;
           pallets?: number | null;
@@ -786,7 +787,6 @@ export type Database = {
           pickup_location_id?: string | null;
           delivery_location_id?: string | null;
           shipment_type_id?: string | null;
-          truck_type_id?: string | null;
           quantity?: number | null;
           weight?: number | null;
           pallets?: number | null;
@@ -813,46 +813,13 @@ export type Database = {
         };
         Relationships: [];
       };
-      truck_types: {
-        Row: {
-          id: string;
-          name: string;
-          code: string | null;
-          description: string | null;
-          is_active: boolean;
-          deleted_at: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          name: string;
-          code?: string | null;
-          description?: string | null;
-          is_active?: boolean;
-          deleted_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          name?: string;
-          code?: string | null;
-          description?: string | null;
-          is_active?: boolean;
-          deleted_at?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       trucks: {
         Row: {
           id: string;
           tenant_id: string | null;
           code: string;
           plate_number: string;
-          truck_type_id: string | null;
+          service_type_id: string | null;
           current_city_id: string | null;
           capacity: number | null;
           capacity_unit: string | null;
@@ -868,7 +835,7 @@ export type Database = {
           tenant_id?: string | null;
           code: string;
           plate_number: string;
-          truck_type_id?: string | null;
+          service_type_id?: string | null;
           current_city_id?: string | null;
           capacity?: number | null;
           capacity_unit?: string | null;
@@ -884,7 +851,7 @@ export type Database = {
           tenant_id?: string | null;
           code?: string;
           plate_number?: string;
-          truck_type_id?: string | null;
+          service_type_id?: string | null;
           current_city_id?: string | null;
           capacity?: number | null;
           capacity_unit?: string | null;
@@ -975,12 +942,16 @@ export type Database = {
           approved_at: string | null;
           client_name: string | null;
           pickup_address: string | null;
+          pickup_name: string | null;
+          pickup_city: string | null;
+          pickup_maps_url: string | null;
           delivery_address: string | null;
+          delivery_city: string | null;
           receiver_name: string | null;
           po_reference: string | null;
           delivery_maps_url: string | null;
           truck_number: string | null;
-          truck_type_name: string | null;
+          service_type_name: string | null;
           shipment_type_name: string | null;
           quantity: number | null;
           freight_amount: number | null;
@@ -1007,12 +978,16 @@ export type Database = {
           approved_at?: string | null;
           client_name?: string | null;
           pickup_address?: string | null;
+          pickup_name?: string | null;
+          pickup_city?: string | null;
+          pickup_maps_url?: string | null;
           delivery_address?: string | null;
+          delivery_city?: string | null;
           receiver_name?: string | null;
           po_reference?: string | null;
           delivery_maps_url?: string | null;
           truck_number?: string | null;
-          truck_type_name?: string | null;
+          service_type_name?: string | null;
           shipment_type_name?: string | null;
           quantity?: number | null;
           freight_amount?: number | null;
@@ -1039,12 +1014,16 @@ export type Database = {
           approved_at?: string | null;
           client_name?: string | null;
           pickup_address?: string | null;
+          pickup_name?: string | null;
+          pickup_city?: string | null;
+          pickup_maps_url?: string | null;
           delivery_address?: string | null;
+          delivery_city?: string | null;
           receiver_name?: string | null;
           po_reference?: string | null;
           delivery_maps_url?: string | null;
           truck_number?: string | null;
-          truck_type_name?: string | null;
+          service_type_name?: string | null;
           shipment_type_name?: string | null;
           quantity?: number | null;
           freight_amount?: number | null;

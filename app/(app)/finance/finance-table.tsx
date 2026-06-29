@@ -10,7 +10,28 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
 import { formatMoney } from "@/lib/format";
+import {
+  DataFilter,
+  matchesFilters,
+  ANY_COLUMN,
+  type ActiveFilter,
+  type FilterColumn,
+} from "@/components/app/data-filter";
 import { setPaymentStatus } from "./actions";
+
+const FIN_FILTER_COLUMNS: FilterColumn[] = [
+  { key: "waybill_no", label: "Waybill #" },
+  { key: "client_name", label: "Client" },
+  { key: "invoice_no", label: "Invoice #" },
+  { key: "payment_status", label: "Payment status" },
+];
+const finFilterValue = (r: FinanceRow, column: string) => {
+  if (column === ANY_COLUMN)
+    return FIN_FILTER_COLUMNS.map(
+      (c) => String((r as Record<string, unknown>)[c.key] ?? ""),
+    ).join(" ");
+  return String((r as Record<string, unknown>)[column] ?? "");
+};
 
 export type FinanceRow = {
   waybill_id: string;
@@ -46,13 +67,17 @@ export function FinanceTable({
   needsPricing: number;
 }) {
   const [filter, setFilter] = useState<string>("all");
+  const [colFilters, setColFilters] = useState<ActiveFilter[]>([]);
 
-  const filtered =
+  const byChip =
     filter === "all"
       ? rows
       : filter === "needs_pricing"
         ? rows.filter((r) => r.needs_pricing)
         : rows.filter((r) => r.payment_status === filter);
+  const filtered = byChip.filter((r) =>
+    matchesFilters(r, colFilters, finFilterValue),
+  );
 
   const chips = ["all", "unbilled", "invoiced", "paid", "needs_pricing"];
   const chipLabel = (c: string) =>
@@ -82,6 +107,14 @@ export function FinanceTable({
             {chipLabel(c)}
           </button>
         ))}
+      </div>
+
+      <div className="mb-4">
+        <DataFilter
+          columns={FIN_FILTER_COLUMNS}
+          filters={colFilters}
+          onChange={setColFilters}
+        />
       </div>
 
       <Table>

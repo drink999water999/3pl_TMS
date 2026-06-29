@@ -29,7 +29,7 @@ export default async function DispatchDetailPage({
     trucks,
     drivers,
     suppliers,
-    truckTypes,
+    serviceTypes,
     people,
     waybill,
     pods,
@@ -51,7 +51,7 @@ export default async function DispatchDetailPage({
     supabase.from("trucks").select("id, code, plate_number"),
     supabase.from("drivers").select("id, name"),
     supabase.from("suppliers").select("id, name"),
-    supabase.from("truck_types").select("id, name"),
+    supabase.from("service_types").select("id, name"),
     supabase.from("profiles").select("id, full_name"),
     supabase
       .from("waybills")
@@ -60,7 +60,7 @@ export default async function DispatchDetailPage({
       .maybeSingle(),
     supabase
       .from("pods")
-      .select("id, kind, note, storage_path, uploaded_by, uploaded_at")
+      .select("id, kind, stage, note, storage_path, uploaded_by, uploaded_at")
       .eq("dispatch_id", params.id)
       .order("uploaded_at", { ascending: false }),
     supabase
@@ -87,7 +87,7 @@ export default async function DispatchDetailPage({
     truck: truck ? `${truck.code} · ${truck.plate_number}` : "—",
     driver: name(drivers.data, dispatch.driver_id),
     supplier: name(suppliers.data, dispatch.supplier_id),
-    truckType: name(truckTypes.data, dispatch.truck_type_id),
+    serviceType: name(serviceTypes.data, dispatch.service_type_id),
   };
 
   const personName = (id: string | null) =>
@@ -104,6 +104,7 @@ export default async function DispatchDetailPage({
     (pods.data ?? []).map(async (p) => ({
       id: p.id,
       kind: p.kind,
+      stage: p.stage,
       note: p.note,
       uploaded_at: p.uploaded_at,
       by: personName(p.uploaded_by),

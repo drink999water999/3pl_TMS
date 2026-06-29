@@ -7,6 +7,7 @@ import {
   requestSchema,
   requestItemSchema,
   deliveryStopSchema,
+  pickupStopSchema,
 } from "@/lib/validation";
 
 type Result = { error?: string };
@@ -38,6 +39,7 @@ export async function createRequest(
   input: unknown,
   items: unknown[],
   deliveries: unknown[] = [],
+  pickups: unknown[] = [],
 ): Promise<Result & { id?: string }> {
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success)
@@ -59,6 +61,14 @@ export async function createRequest(
     parsedStops.push(r.data);
   }
 
+  const parsedPickups = [];
+  for (const raw of pickups ?? []) {
+    const r = pickupStopSchema.safeParse(raw);
+    if (!r.success)
+      return { error: r.error.issues[0]?.message ?? "Invalid pickup stop" };
+    parsedPickups.push(r.data);
+  }
+
   const { supabase, uid, role, clientId } = await staffCtx();
   // Clients can only create requests for their own linked company.
   const effectiveClientId =
@@ -71,10 +81,15 @@ export async function createRequest(
           : "Select a client.",
     };
 
+  // The first pickup is mirrored to the request so dispatch/waybill still work.
+  const primaryPickup =
+    parsedPickups[0]?.location_id ?? parsed.data.pickup_location_id ?? null;
+
   const { data, error } = await supabase
     .from("transport_requests")
     .insert({
       ...parsed.data,
+      pickup_location_id: primaryPickup,
       client_id: effectiveClientId,
       request_no: "", // trigger fills TR-0001
       status: "Draft",
@@ -105,6 +120,18 @@ export async function createRequest(
     if (stopErr) return { error: stopErr.message };
   }
 
+  if (parsedPickups.length > 0) {
+    const pickupRows = parsedPickups.map((st, i) => ({
+      ...st,
+      request_id: data.id,
+      sequence: i + 1,
+    }));
+    const { error: pickupErr } = await supabase
+      .from("request_pickups")
+      .insert(pickupRows);
+    if (pickupErr) return { error: pickupErr.message };
+  }
+
   revalidatePath("/requests");
   return { id: data.id };
 }
@@ -113,6 +140,7 @@ export async function updateRequest(
   id: string,
   input: unknown,
   deliveries: unknown[] = [],
+  pickups: unknown[] = [],
 ): Promise<Result> {
   const parsed = requestSchema.safeParse(input);
   if (!parsed.success)
@@ -126,11 +154,22 @@ export async function updateRequest(
     parsedStops.push(r.data);
   }
 
+  const parsedPickups = [];
+  for (const raw of pickups ?? []) {
+    const r = pickupStopSchema.safeParse(raw);
+    if (!r.success)
+      return { error: r.error.issues[0]?.message ?? "Invalid pickup stop" };
+    parsedPickups.push(r.data);
+  }
+
   const { supabase, uid, role, clientId } = await staffCtx();
+  const primaryPickup =
+    parsedPickups[0]?.location_id ?? parsed.data.pickup_location_id ?? null;
+  const base = { ...parsed.data, pickup_location_id: primaryPickup };
   const payload =
     role === "client" && clientId
-      ? { ...parsed.data, client_id: clientId, updated_by: uid }
-      : { ...parsed.data, updated_by: uid };
+      ? { ...base, client_id: clientId, updated_by: uid }
+      : { ...base, updated_by: uid };
   const { data, error } = await supabase
     .from("transport_requests")
     .update(payload)
@@ -153,6 +192,20 @@ export async function updateRequest(
       .from("request_deliveries")
       .insert(stopRows);
     if (stopErr) return { error: stopErr.message };
+  }
+
+  // Replace the pickup stops (drafts only).
+  await supabase.from("request_pickups").delete().eq("request_id", id);
+  if (parsedPickups.length > 0) {
+    const pickupRows = parsedPickups.map((st, i) => ({
+      ...st,
+      request_id: id,
+      sequence: i + 1,
+    }));
+    const { error: pickupErr } = await supabase
+      .from("request_pickups")
+      .insert(pickupRows);
+    if (pickupErr) return { error: pickupErr.message };
   }
 
   revalidatePath("/requests");

@@ -15,6 +15,13 @@ import { formatDate, formatMoney } from "@/lib/format";
 
 type Waybill = Tables<"waybills">;
 type Item = Tables<"request_items">;
+export type WaybillStop = {
+  name: string | null;
+  address: string | null;
+  city: string | null;
+  mapsUrl: string | null;
+  contact: string | null;
+};
 
 const NAVY = "#0f2a4a";
 const BORDER = "#c9d2dd";
@@ -105,11 +112,18 @@ export function waybillDocument({
   waybill,
   items,
   appName,
+  pickups = [],
+  deliveries = [],
 }: {
   waybill: Waybill;
   items: Item[];
   appName: string;
+  pickups?: WaybillStop[];
+  deliveries?: WaybillStop[];
 }): React.ReactElement {
+  // Extra delivery stops (beyond the primary one shown on page 1) each get their
+  // own page so a multi-drop trip produces a multi-page waybill.
+  const extraStops = deliveries.length > 1 ? deliveries.slice(1) : [];
   return (
     <Document title={waybill.waybill_no}>
       <Page size="A4" style={styles.page}>
@@ -180,6 +194,23 @@ export function waybillDocument({
           </View>
         </View>
 
+        {/* 2b) Additional pickups (multi-pickup trips) */}
+        {pickups.length > 1 ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Pickup Locations</Text>
+            <View style={styles.sectionBody}>
+              {pickups.map((p, i) => (
+                <View key={i} style={styles.row}>
+                  <Field label={`Pickup ${i + 1}`} value={p.name} />
+                  <Field label="City" value={p.city} />
+                  <Field label="Address" value={p.address} />
+                  <Field label="Contact" value={p.contact} />
+                </View>
+              ))}
+            </View>
+          </View>
+        ) : null}
+
         {/* 3) Goods */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Goods</Text>
@@ -223,7 +254,7 @@ export function waybillDocument({
           <View style={styles.sectionBody}>
             <View style={styles.row}>
               <Field label="Truck Number" value={waybill.truck_number} />
-              <Field label="Truck Type" value={waybill.truck_type_name} />
+              <Field label="Service Type" value={waybill.service_type_name} />
               <Field label="Driver" value={waybill.driver_name} />
             </View>
           </View>
@@ -236,6 +267,59 @@ export function waybillDocument({
           </Text>
         </View>
       </Page>
+
+      {/* One extra page per additional delivery stop. */}
+      {extraStops.map((stop, i) => (
+        <Page key={i} size="A4" style={styles.page}>
+          <View style={styles.header}>
+            <View>
+              <Text style={styles.brand}>{appName}</Text>
+              <Text style={styles.brandSub}>
+                Transport Waybill · Delivery Stop {i + 2} of {deliveries.length}
+              </Text>
+            </View>
+            <View>
+              <Text style={styles.docTitle}>{waybill.waybill_no}</Text>
+              <Text style={styles.docMeta}>{waybill.client_name ?? ""}</Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>
+              Delivery Stop {i + 2}
+            </Text>
+            <View style={styles.sectionBody}>
+              <View style={styles.row}>
+                <Field label="Receiver" value={stop.name} />
+                <Field label="City" value={stop.city} />
+                <Field label="Contact" value={stop.contact} />
+              </View>
+              <View style={styles.row}>
+                <View style={styles.addressBox}>
+                  <Text style={styles.fieldLabel}>Delivery Address</Text>
+                  <Text style={styles.fieldValue}>{stop.address || "—"}</Text>
+                  {stop.mapsUrl ? (
+                    <Link
+                      src={stop.mapsUrl}
+                      style={{ fontSize: 9, color: "#2b8fd6", marginTop: 2 }}
+                    >
+                      Open location in Google Maps
+                    </Link>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.footer} fixed>
+            <Text>{appName}</Text>
+            <Text>
+              {waybill.waybill_no} · Generated{" "}
+              {formatDate(new Date().toISOString())}
+            </Text>
+          </View>
+        </Page>
+      ))}
     </Document>
   );
 }

@@ -20,8 +20,6 @@ import {
   deleteRoute,
   saveServiceType,
   deleteServiceType,
-  saveTruckType,
-  deleteTruckType,
   saveStandardRate,
   deleteStandardRate,
 } from "./actions";
@@ -29,14 +27,12 @@ import {
 type City = Tables<"cities">;
 type Route = Tables<"routes">;
 type ServiceType = Tables<"service_types">;
-type TruckType = Tables<"truck_types">;
 type StandardRate = Tables<"standard_rates">;
 
 const TABS = [
   { key: "cities", label: "Cities" },
   { key: "routes", label: "Routes" },
   { key: "services", label: "Service Types" },
-  { key: "trucks", label: "Truck Types" },
   { key: "rates", label: "Standard Rates" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
@@ -45,13 +41,11 @@ export function SetupTabs({
   cities,
   routes,
   serviceTypes,
-  truckTypes,
   standardRates,
 }: {
   cities: City[];
   routes: Route[];
   serviceTypes: ServiceType[];
-  truckTypes: TruckType[];
   standardRates: StandardRate[];
 }) {
   const [tab, setTab] = useState<TabKey>("cities");
@@ -94,7 +88,6 @@ export function SetupTabs({
       {tab === "cities" && <CitiesTab cities={cities} />}
       {tab === "routes" && <RoutesTab routes={routes} cities={cities} routeLabel={routeLabel} />}
       {tab === "services" && <ServicesTab serviceTypes={serviceTypes} />}
-      {tab === "trucks" && <TruckTypesTab truckTypes={truckTypes} />}
       {tab === "rates" && (
         <RatesTab
           standardRates={standardRates}
@@ -724,132 +717,6 @@ function StandardRateDialog({
             <Label htmlFor="currency">Currency</Label>
             <Input id="currency" {...register("currency")} />
           </div>
-        </div>
-        <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" {...register("is_active")} /> Active
-        </label>
-        <ErrorBox error={error} />
-        <DialogFooter onClose={onClose} saving={saving} />
-      </form>
-    </Dialog>
-  );
-}
-
-// ============================ Truck Types =====================================
-function TruckTypesTab({ truckTypes }: { truckTypes: TruckType[] }) {
-  const [open, setOpen] = useState(false);
-  const [edit, setEdit] = useState<TruckType | undefined>(undefined);
-  const router = useRouter();
-  return (
-    <div className="space-y-3">
-      <p className="text-sm text-muted-foreground">
-        Physical vehicle types used by Fleet trucks and dispatch (separate from
-        Service Types, which drive client pricing).
-      </p>
-      <div className="flex justify-end">
-        <Button
-          onClick={() => {
-            setEdit(undefined);
-            setOpen(true);
-          }}
-        >
-          <Plus className="mr-1.5 h-4 w-4" /> Add truck type
-        </Button>
-      </div>
-      <Table>
-        <THead>
-          <TR>
-            <TH>Name</TH>
-            <TH>Code</TH>
-            <TH>Description</TH>
-            <TH>Active</TH>
-            <TH className="text-right">Actions</TH>
-          </TR>
-        </THead>
-        <TBody>
-          {truckTypes.length === 0 ? (
-            <TR>
-              <TD colSpan={5} className="text-center text-muted-foreground">
-                No truck types yet.
-              </TD>
-            </TR>
-          ) : (
-            truckTypes.map((t) => (
-              <TR key={t.id}>
-                <TD className="font-medium">{t.name}</TD>
-                <TD>{t.code ?? "—"}</TD>
-                <TD>{t.description ?? "—"}</TD>
-                <TD>
-                  <YesNo value={t.is_active} />
-                </TD>
-                <TD className="text-right">
-                  <RowActions
-                    onEdit={() => {
-                      setEdit(t);
-                      setOpen(true);
-                    }}
-                    onDelete={async () => {
-                      await deleteTruckType(t.id);
-                      router.refresh();
-                    }}
-                    label={t.name}
-                  />
-                </TD>
-              </TR>
-            ))
-          )}
-        </TBody>
-      </Table>
-      {open && <TruckTypeDialog truckType={edit} onClose={() => setOpen(false)} />}
-    </div>
-  );
-}
-
-function TruckTypeDialog({
-  truckType,
-  onClose,
-}: {
-  truckType?: TruckType;
-  onClose: () => void;
-}) {
-  const router = useRouter();
-  const { register, handleSubmit } = useForm({
-    defaultValues: {
-      name: truckType?.name ?? "",
-      code: truckType?.code ?? "",
-      description: truckType?.description ?? "",
-      is_active: truckType?.is_active ?? true,
-    },
-  });
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const onSubmit = handleSubmit(async (values) => {
-    setSaving(true);
-    setError(null);
-    const res = await saveTruckType(values, truckType?.id);
-    setSaving(false);
-    if (res.error) return setError(res.error);
-    onClose();
-    router.refresh();
-  });
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      title={truckType ? "Edit truck type" : "New truck type"}
-    >
-      <form onSubmit={onSubmit} className="space-y-3">
-        <div className="space-y-1.5">
-          <Label htmlFor="name">Name</Label>
-          <Input id="name" {...register("name", { required: true })} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="code">Code</Label>
-          <Input id="code" {...register("code")} />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="description">Description</Label>
-          <Input id="description" {...register("description")} />
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" {...register("is_active")} /> Active

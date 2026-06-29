@@ -26,7 +26,6 @@ export default async function ClientDetailPage({
     contacts,
     locations,
     rates,
-    truckTypes,
     shipmentTypes,
     serviceTypes,
     cities,
@@ -50,11 +49,6 @@ export default async function ClientDetailPage({
       .eq("client_id", params.id)
       .is("deleted_at", null)
       .order("created_at"),
-    supabase
-      .from("truck_types")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("name"),
     supabase
       .from("shipment_types")
       .select("id, name")
@@ -97,7 +91,6 @@ export default async function ClientDetailPage({
       contacts={contacts.data ?? []}
       locations={locations.data ?? []}
       rates={rates.data ?? []}
-      truckTypes={truckTypes.data ?? []}
       shipmentTypes={shipmentTypes.data ?? []}
       serviceTypes={serviceTypes.data ?? []}
       cities={cities.data ?? []}

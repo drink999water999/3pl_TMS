@@ -22,7 +22,7 @@ export default async function SupplierDetailPage({
     .maybeSingle();
   if (!supplier) notFound();
 
-  const [trucks, rates, truckTypes, serviceTypes, cities, routes] =
+  const [trucks, rates, serviceTypes, cities, routes] =
     await Promise.all([
       supabase
         .from("supplier_trucks")
@@ -36,11 +36,6 @@ export default async function SupplierDetailPage({
         .eq("supplier_id", params.id)
         .is("deleted_at", null)
         .order("created_at"),
-      supabase
-        .from("truck_types")
-        .select("id, name")
-        .eq("is_active", true)
-        .order("name"),
       supabase
         .from("service_types")
         .select("id, name")
@@ -71,7 +66,6 @@ export default async function SupplierDetailPage({
       supplier={supplier}
       trucks={trucks.data ?? []}
       rates={rates.data ?? []}
-      truckTypes={truckTypes.data ?? []}
       serviceTypes={serviceTypes.data ?? []}
       routeOptions={routeOptions}
       canEdit={canEdit}

@@ -42,8 +42,83 @@ async function buildAndStorePdf(
     .eq("request_id", wb.request_id)
     .order("created_at");
 
+  // Load all pickup + delivery stops so a multi-location trip prints multi-page.
+  const [pickupRows, deliveryRows] = await Promise.all([
+    supabase
+      .from("request_pickups")
+      .select("location_id, contact_name, contact_phone, sequence")
+      .eq("request_id", wb.request_id)
+      .order("sequence"),
+    supabase
+      .from("request_deliveries")
+      .select("location_id, receiver_name, receiver_phone, sequence")
+      .eq("request_id", wb.request_id)
+      .order("sequence"),
+  ]);
+
+  const locIds = [
+    ...(pickupRows.data ?? []).map((r) => r.location_id),
+    ...(deliveryRows.data ?? []).map((r) => r.location_id),
+  ].filter((id): id is string => !!id);
+
+  const locById = new Map<
+    string,
+    { name: string | null; address: string | null; maps_url: string | null; city_id: string | null }
+  >();
+  const cityById = new Map<string, string>();
+  if (locIds.length > 0) {
+    const { data: locs } = await supabase
+      .from("locations")
+      .select("id, name, address, maps_url, city_id")
+      .in("id", locIds);
+    for (const l of locs ?? [])
+      locById.set(l.id, {
+        name: l.name,
+        address: l.address,
+        maps_url: l.maps_url,
+        city_id: l.city_id,
+      });
+    const cityIds = (locs ?? [])
+      .map((l) => l.city_id)
+      .filter((id): id is string => !!id);
+    if (cityIds.length > 0) {
+      const { data: cts } = await supabase
+        .from("cities")
+        .select("id, name")
+        .in("id", cityIds);
+      for (const c of cts ?? []) cityById.set(c.id, c.name);
+    }
+  }
+
+  const pickups = (pickupRows.data ?? []).map((r) => {
+    const l = r.location_id ? locById.get(r.location_id) : undefined;
+    return {
+      name: l?.name ?? null,
+      address: l?.address ?? null,
+      city: l?.city_id ? (cityById.get(l.city_id) ?? null) : null,
+      mapsUrl: l?.maps_url ?? null,
+      contact: r.contact_name ?? null,
+    };
+  });
+  const deliveries = (deliveryRows.data ?? []).map((r) => {
+    const l = r.location_id ? locById.get(r.location_id) : undefined;
+    return {
+      name: r.receiver_name ?? l?.name ?? null,
+      address: l?.address ?? null,
+      city: l?.city_id ? (cityById.get(l.city_id) ?? null) : null,
+      mapsUrl: l?.maps_url ?? null,
+      contact: r.receiver_phone ?? null,
+    };
+  });
+
   const buffer = await renderToBuffer(
-    waybillDocument({ waybill: wb, items: items ?? [], appName: APP_NAME }),
+    waybillDocument({
+      waybill: wb,
+      items: items ?? [],
+      appName: APP_NAME,
+      pickups,
+      deliveries,
+    }),
   );
 
   const path = `${waybillId}/${wb.waybill_no}.pdf`;

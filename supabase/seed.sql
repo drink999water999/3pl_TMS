@@ -49,46 +49,46 @@ insert into drivers (name, phone, license_no, status) values
   ('Mahmoud Adel', '+20 101 555 6677', 'DL-100987', 'available')
 on conflict do nothing;
 
--- --- Trucks (linked to truck types + a default driver) ------------------------
-insert into trucks (code, plate_number, truck_type_id, capacity, status, default_driver_id)
-select 'TRK-001', 'CAI-1234', tt.id, 10000, 'available', d.id
-from truck_types tt, drivers d
-where tt.code = '10T' and d.license_no = 'DL-100234'
+-- --- Trucks (linked to service types + a default driver) ----------------------
+insert into trucks (code, plate_number, service_type_id, capacity, status, default_driver_id)
+select 'TRK-001', 'CAI-1234', st.id, 10000, 'available', d.id
+from service_types st, drivers d
+where st.name = 'Lorry-10 Ton' and d.license_no = 'DL-100234'
 on conflict do nothing;
 
-insert into trucks (code, plate_number, truck_type_id, capacity, status, default_driver_id)
-select 'TRK-002', 'CAI-5678', tt.id, 5000, 'available', d.id
-from truck_types tt, drivers d
-where tt.code = '5T' and d.license_no = 'DL-100987'
+insert into trucks (code, plate_number, service_type_id, capacity, status, default_driver_id)
+select 'TRK-002', 'CAI-5678', st.id, 5000, 'available', d.id
+from service_types st, drivers d
+where st.name = 'Dyna-5 Ton' and d.license_no = 'DL-100987'
 on conflict do nothing;
 
-insert into trucks (code, plate_number, truck_type_id, capacity, status)
-select 'TRK-003', 'ALX-9012', tt.id, 1500, 'maintenance'
-from truck_types tt where tt.code = 'VAN'
+insert into trucks (code, plate_number, service_type_id, capacity, status)
+select 'TRK-003', 'ALX-9012', st.id, 1500, 'maintenance'
+from service_types st where st.name = 'Dyna-4 Ton'
 on conflict do nothing;
 
--- --- Suppliers (outsourced carriers) + their truck types ----------------------
+-- --- Suppliers (outsourced carriers) + their service types --------------------
 insert into suppliers (name, code, phone, email, status) values
   ('Delta Transport Co', 'DELTA', '+20 102 777 8899', 'book@delta.example', 'active'),
   ('Cairo Movers',       'CMOV',  '+20 102 333 1122', 'ops@cmov.example',   'active')
 on conflict do nothing;
 
-insert into supplier_truck_types (supplier_id, truck_type_id)
-select s.id, tt.id from suppliers s, truck_types tt
-where s.code = 'DELTA' and tt.code in ('10T', 'CURT')
+insert into supplier_service_types (supplier_id, service_type_id)
+select s.id, st.id from suppliers s, service_types st
+where s.code = 'DELTA' and st.name in ('Lorry-10 Ton', 'Curtain Side')
 on conflict do nothing;
 
-insert into supplier_truck_types (supplier_id, truck_type_id)
-select s.id, tt.id from suppliers s, truck_types tt
-where s.code = 'CMOV' and tt.code in ('5T', 'VAN')
+insert into supplier_service_types (supplier_id, service_type_id)
+select s.id, st.id from suppliers s, service_types st
+where s.code = 'CMOV' and st.name in ('Dyna-5 Ton', 'Dyna-4 Ton')
 on conflict do nothing;
 
 -- --- A sample contract rate ---------------------------------------------------
-insert into contract_rates (client_id, delivery_location_id, truck_type_id, shipment_type_id, rate, currency)
-select c.id, l.id, tt.id, st.id, 3500.00, 'EGP'
+insert into contract_rates (client_id, delivery_location_id, service_type_id, shipment_type_id, rate, currency)
+select c.id, l.id, svc.id, sh.id, 3500.00, 'EGP'
 from clients c
 join locations l on l.client_id = c.id and l.kind = 'delivery' and l.name = 'Acme Giza DC'
-join truck_types tt on tt.code = '10T'
-join shipment_types st on st.code = 'DRY'
+join service_types svc on svc.name = 'Lorry-10 Ton'
+join shipment_types sh on sh.code = 'DRY'
 where c.code = 'ACME'
 on conflict do nothing;

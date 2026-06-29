@@ -67,6 +67,11 @@ type DeliveryStop = {
   receiver_name: string | null;
   receiver_phone: string | null;
 };
+type PickupStopRow = {
+  location_id: string | null;
+  contact_name: string | null;
+  contact_phone: string | null;
+};
 type TimelineEntry = {
   id: string;
   entity: string;
@@ -81,7 +86,7 @@ type DispatchInfo = {
   assignmentType: string;
   driver: string | null;
   truck: string | null;
-  truckType: string | null;
+  serviceType: string | null;
   supplier: string | null;
   supplierTruck: string | null;
 } | null;
@@ -96,7 +101,7 @@ type Labels = {
   pickup: string;
   delivery: string;
   shipmentType: string;
-  truckType: string;
+  serviceType: string;
 };
 
 export function RequestDetail({
@@ -108,13 +113,13 @@ export function RequestDetail({
   clients,
   locations,
   shipmentTypes,
-  truckTypes,
   serviceTypes = [],
   cities = [],
   routes = [],
   contractRates = [],
   standardRates = [],
   deliveries = [],
+  pickupStops = [],
   multiLocationCharge = 0,
   clientMultiCharge = {},
   canSetPricing = false,
@@ -132,13 +137,13 @@ export function RequestDetail({
   clients: Lookup[];
   locations: Loc[];
   shipmentTypes: Lookup[];
-  truckTypes: Lookup[];
   serviceTypes?: ServiceType[];
   cities?: Lookup[];
   routes?: RouteRow[];
   contractRates?: ContractRate[];
   standardRates?: ContractRate[];
   deliveries?: DeliveryStop[];
+  pickupStops?: PickupStopRow[];
   multiLocationCharge?: number;
   clientMultiCharge?: Record<string, number>;
   canSetPricing?: boolean;
@@ -219,13 +224,13 @@ export function RequestDetail({
           clients={clients}
           locations={locations}
           shipmentTypes={shipmentTypes}
-          truckTypes={truckTypes}
           serviceTypes={serviceTypes}
           cities={cities}
           routes={routes}
           contractRates={contractRates}
           standardRates={standardRates}
           deliveries={deliveries}
+          pickupStops={pickupStops}
           multiLocationCharge={multiLocationCharge}
           clientMultiCharge={clientMultiCharge}
           canSetPricing={canSetPricing}
@@ -353,8 +358,8 @@ export function RequestDetail({
                 <Detail label="Driver" value={dispatchInfo.driver ?? "—"} />
                 <Detail label="Truck" value={dispatchInfo.truck ?? "—"} />
                 <Detail
-                  label="Truck type"
-                  value={dispatchInfo.truckType ?? "—"}
+                  label="Service type"
+                  value={dispatchInfo.serviceType ?? "—"}
                 />
               </>
             ) : (
@@ -365,8 +370,8 @@ export function RequestDetail({
                   value={dispatchInfo.supplierTruck ?? "—"}
                 />
                 <Detail
-                  label="Truck type"
-                  value={dispatchInfo.truckType ?? "—"}
+                  label="Service type"
+                  value={dispatchInfo.serviceType ?? "—"}
                 />
               </>
             )}
@@ -383,10 +388,11 @@ export function RequestDetail({
             <Detail label="Pickup" value={labels.pickup} />
             <Detail label="Delivery" value={labels.delivery} />
             <Detail label="Shipment type" value={labels.shipmentType} />
-            <Detail label="Truck type" value={labels.truckType} />
             {serviceTypeName ? (
               <Detail label="Service type" value={serviceTypeName} />
-            ) : null}
+            ) : (
+              <Detail label="Service type" value={labels.serviceType} />
+            )}
             {routeLabel ? (
               <Detail label="Route" value={routeLabel} />
             ) : null}

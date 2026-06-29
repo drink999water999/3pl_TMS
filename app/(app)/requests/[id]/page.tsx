@@ -29,13 +29,13 @@ export default async function RequestDetailPage({
     clients,
     locations,
     shipmentTypes,
-    truckTypes,
     people,
     dispatchRes,
     serviceTypes,
     cities,
     routes,
     deliveriesRes,
+    pickupsRes,
     clientRow,
     contractRatesRes,
     standardRatesRes,
@@ -69,16 +69,11 @@ export default async function RequestDetailPage({
       .select("id, name")
       .eq("is_active", true)
       .order("name"),
-    supabase
-      .from("truck_types")
-      .select("id, name")
-      .eq("is_active", true)
-      .order("name"),
     supabase.from("profiles").select("id, full_name"),
     supabase
       .from("dispatches")
       .select(
-        "id, status, assignment_type, truck_id, driver_id, supplier_id, truck_type_id, supplier_truck, notes",
+        "id, status, assignment_type, truck_id, driver_id, supplier_id, service_type_id, supplier_truck, notes",
       )
       .eq("request_id", params.id)
       .maybeSingle(),
@@ -96,6 +91,11 @@ export default async function RequestDetailPage({
     supabase
       .from("request_deliveries")
       .select("location_id, receiver_name, receiver_phone, sequence")
+      .eq("request_id", params.id)
+      .order("sequence"),
+    supabase
+      .from("request_pickups")
+      .select("location_id, contact_name, contact_phone, sequence")
       .eq("request_id", params.id)
       .order("sequence"),
     supabase
@@ -132,8 +132,9 @@ export default async function RequestDetailPage({
     shipmentType:
       shipmentTypes.data?.find((s) => s.id === request.shipment_type_id)?.name ??
       "—",
-    truckType:
-      truckTypes.data?.find((t) => t.id === request.truck_type_id)?.name ?? "—",
+    serviceType:
+      serviceTypes.data?.find((t) => t.id === request.service_type_id)?.name ??
+      "—",
   };
 
   // Resolve the dispatch assignment (driver / truck / supplier) + its history.
@@ -144,7 +145,7 @@ export default async function RequestDetailPage({
     assignmentType: string;
     driver: string | null;
     truck: string | null;
-    truckType: string | null;
+    serviceType: string | null;
     supplier: string | null;
     supplierTruck: string | null;
   } | null = null;
@@ -188,9 +189,9 @@ export default async function RequestDetailPage({
       assignmentType: dispatch.assignment_type,
       driver: (driverRes.data as { name: string } | null)?.name ?? null,
       truck: truck ? `${truck.code} · ${truck.plate_number}` : null,
-      truckType:
-        truckTypes.data?.find((t) => t.id === dispatch.truck_type_id)?.name ??
-        null,
+      serviceType:
+        serviceTypes.data?.find((t) => t.id === dispatch.service_type_id)
+          ?.name ?? null,
       supplier: (supplierRes.data as { name: string } | null)?.name ?? null,
       supplierTruck: dispatch.supplier_truck ?? null,
     };
@@ -242,13 +243,13 @@ export default async function RequestDetailPage({
       clients={clients.data ?? []}
       locations={allLocations}
       shipmentTypes={shipmentTypes.data ?? []}
-      truckTypes={truckTypes.data ?? []}
       serviceTypes={serviceTypes.data ?? []}
       cities={cities.data ?? []}
       routes={routes.data ?? []}
       contractRates={contractRatesRes.data ?? []}
       standardRates={standardRatesRes.data ?? []}
       deliveries={deliveriesRes.data ?? []}
+      pickupStops={pickupsRes.data ?? []}
       multiLocationCharge={clientRow.data?.multi_location_charge ?? 0}
       clientMultiCharge={clientMultiCharge}
       canSetPricing={!isClient}

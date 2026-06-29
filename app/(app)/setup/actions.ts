@@ -8,7 +8,6 @@ import {
   routeSchema,
   serviceTypeSchema,
   standardRateSchema,
-  truckTypeSchema,
 } from "@/lib/validation";
 
 type Result = { error?: string };
@@ -72,34 +71,6 @@ export async function deleteRoute(id: string): Promise<Result> {
   const supabase = await db();
   const { error } = await supabase
     .from("routes")
-    .update({ deleted_at: nowIso(), is_active: false })
-    .eq("id", id);
-  if (error) return { error: error.message };
-  paths();
-  return {};
-}
-
-// --- Truck types (physical vehicles; used by fleet + dispatch) ----------------
-export async function saveTruckType(
-  input: unknown,
-  id?: string,
-): Promise<Result> {
-  const parsed = truckTypeSchema.safeParse(input);
-  if (!parsed.success)
-    return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
-  const supabase = await db();
-  const { error } = id
-    ? await supabase.from("truck_types").update(parsed.data).eq("id", id)
-    : await supabase.from("truck_types").insert(parsed.data);
-  if (error) return { error: error.message };
-  paths();
-  return {};
-}
-
-export async function deleteTruckType(id: string): Promise<Result> {
-  const supabase = await db();
-  const { error } = await supabase
-    .from("truck_types")
     .update({ deleted_at: nowIso(), is_active: false })
     .eq("id", id);
   if (error) return { error: error.message };

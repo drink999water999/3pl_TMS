@@ -17,7 +17,6 @@ export default async function NewRequestPage() {
     clients,
     locations,
     shipmentTypes,
-    truckTypes,
     serviceTypes,
     cities,
     routes,
@@ -39,11 +38,6 @@ export default async function NewRequestPage() {
         .order("name"),
       supabase
         .from("shipment_types")
-        .select("id, name")
-        .eq("is_active", true)
-        .order("name"),
-      supabase
-        .from("truck_types")
         .select("id, name")
         .eq("is_active", true)
         .order("name"),
@@ -94,7 +88,6 @@ export default async function NewRequestPage() {
         clients={clients.data ?? []}
         locations={locations.data ?? []}
         shipmentTypes={shipmentTypes.data ?? []}
-        truckTypes={truckTypes.data ?? []}
         serviceTypes={serviceTypes.data ?? []}
         cities={cities.data ?? []}
         routes={routes.data ?? []}

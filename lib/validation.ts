@@ -79,7 +79,6 @@ export type LocationInput = z.input<typeof locationSchema>;
 
 export const contractRateSchema = z.object({
   delivery_location_id: optionalUuid,
-  truck_type_id: optionalUuid,
   service_type_id: optionalUuid,
   route_id: optionalUuid,
   shipment_type_id: optionalUuid,
@@ -94,7 +93,7 @@ export type ContractRateInput = z.input<typeof contractRateSchema>;
 export const truckSchema = z.object({
   code: z.string().min(1, "Code is required"),
   plate_number: z.string().min(1, "Plate number is required"),
-  truck_type_id: optionalUuid,
+  service_type_id: optionalUuid,
   current_city_id: optionalUuid,
   capacity: optionalNumber,
   capacity_unit: z.string().default("kg"),
@@ -123,7 +122,7 @@ export const supplierSchema = z.object({
   address: optionalText,
   status: z.enum(["active", "inactive"]).default("active"),
   is_active: z.boolean().default(true),
-  truck_type_ids: z.array(z.string().uuid()).default([]),
+  service_type_ids: z.array(z.string().uuid()).default([]),
 });
 export type SupplierInput = z.input<typeof supplierSchema>;
 
@@ -133,7 +132,6 @@ export const requestSchema = z.object({
   pickup_location_id: optionalUuid,
   delivery_location_id: optionalUuid,
   shipment_type_id: optionalUuid,
-  truck_type_id: optionalUuid,
   service_type_id: optionalUuid,
   route_id: optionalUuid,
   quantity: optionalNumber,
@@ -162,6 +160,14 @@ export const deliveryStopSchema = z.object({
 });
 export type DeliveryStopInput = z.input<typeof deliveryStopSchema>;
 
+// One pickup stop in a multi-pickup trip.
+export const pickupStopSchema = z.object({
+  location_id: z.string().uuid("Select a pickup location"),
+  contact_name: optionalText,
+  contact_phone: optionalText,
+});
+export type PickupStopInput = z.input<typeof pickupStopSchema>;
+
 export const requestItemSchema = z.object({
   item_name: z.string().min(1, "Item name is required"),
   description: optionalText,
@@ -182,7 +188,7 @@ export const dispatchSchema = z
     supplier_truck_id: optionalUuid,
     outsourced_driver_name: optionalText,
     outsourced_driver_id: optionalText,
-    truck_type_id: optionalUuid,
+    service_type_id: optionalUuid,
     carrier_cost: optionalNumber,
     customer_charge: optionalNumber,
     notes: optionalText,
@@ -208,11 +214,11 @@ export const dispatchSchema = z
           path: ["supplier_id"],
           message: "Select a supplier",
         });
-      if (!v.truck_type_id)
+      if (!v.service_type_id)
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
-          path: ["truck_type_id"],
-          message: "Select a truck type",
+          path: ["service_type_id"],
+          message: "Select a service type",
         });
     }
   });
@@ -264,7 +270,7 @@ export const amendWaybillSchema = z.object({
   pickup_address: optionalText,
   delivery_address: optionalText,
   truck_number: optionalText,
-  truck_type_name: optionalText,
+  service_type_name: optionalText,
   shipment_type_name: optionalText,
   driver_name: optionalText,
   supplier_name: optionalText,
@@ -306,14 +312,6 @@ export const routeSchema = z.object({
 });
 export type RouteInput = z.input<typeof routeSchema>;
 
-export const truckTypeSchema = z.object({
-  name: z.string().min(1, "Name is required"),
-  code: optionalText,
-  description: optionalText,
-  is_active: z.boolean().default(true),
-});
-export type TruckTypeInput = z.input<typeof truckTypeSchema>;
-
 export const serviceTypeSchema = z.object({
   name: z.string().min(1, "Name is required"),
   code: optionalText,
@@ -332,7 +330,6 @@ export const supplierTruckSchema = z.object({
   driver_name: optionalText,
   driver_id_no: optionalText,
   driver_mobile: optionalText,
-  truck_type_id: optionalUuid,
   service_type_id: optionalUuid,
   is_active: z.boolean().default(true),
 });
@@ -342,7 +339,6 @@ export type SupplierTruckInput = z.input<typeof supplierTruckSchema>;
 export const supplierRateSchema = z.object({
   service_type_id: optionalUuid,
   route_id: optionalUuid,
-  truck_type_id: optionalUuid,
   lane: optionalText,
   rate: z.preprocess((v) => Number(v), z.number().positive("Cost must be > 0")),
   currency: z.string().min(1).default("SAR"),

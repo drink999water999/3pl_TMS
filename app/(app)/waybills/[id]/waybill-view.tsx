@@ -304,7 +304,7 @@ export function WaybillView({
         <Section title="Transportation">
           <Grid>
             <Field label="Truck number" value={waybill.truck_number} />
-            <Field label="Truck type" value={waybill.truck_type_name} />
+            <Field label="Service type" value={waybill.service_type_name} />
             <Field label="Driver" value={waybill.driver_name} />
             {canSeeInternal ? (
               <Field label="Supplier" value={waybill.supplier_name} />
@@ -644,7 +644,7 @@ function AmendDialog({
     pickup_address: waybill.pickup_address ?? "",
     delivery_address: waybill.delivery_address ?? "",
     truck_number: waybill.truck_number ?? "",
-    truck_type_name: waybill.truck_type_name ?? "",
+    service_type_name: waybill.service_type_name ?? "",
     shipment_type_name: waybill.shipment_type_name ?? "",
     driver_name: waybill.driver_name ?? "",
     supplier_name: waybill.supplier_name ?? "",
@@ -703,7 +703,7 @@ function AmendDialog({
         </div>
         <div className="grid grid-cols-2 gap-3">
           {field("Truck number", "truck_number")}
-          {field("Truck type", "truck_type_name")}
+          {field("Service type", "service_type_name")}
           {field("Driver", "driver_name")}
           {field("Supplier", "supplier_name")}
           {field("Quantity", "quantity", "number")}

@@ -39,6 +39,7 @@ import {
 type Pod = {
   id: string;
   kind: string;
+  stage: string;
   note: string | null;
   uploaded_at: string;
   by: string;
@@ -61,7 +62,7 @@ type Labels = {
   truck: string;
   driver: string;
   supplier: string;
-  truckType: string;
+  serviceType: string;
 };
 type TimelineEntry = {
   id: string;
@@ -256,7 +257,7 @@ export function DispatchDetail({
               label="Type"
               value={isOwn ? "Own fleet" : "Outsourced"}
             />
-            <Detail label="Truck type" value={labels.truckType} />
+            <Detail label="Service type" value={labels.serviceType} />
             {isOwn ? (
               <>
                 <Detail label="Truck" value={labels.truck} />
@@ -374,7 +375,7 @@ export function DispatchDetail({
                 >
                   <div className="flex items-center gap-2">
                     <Badge variant="default">
-                      {p.kind === "photo" ? "Photo" : "Signed note"}
+                      {p.stage === "pickup" ? "Pickup photo" : "Delivery photo"}
                     </Badge>
                     {p.url ? (
                       <a
@@ -480,26 +481,28 @@ export function DispatchDetail({
 
 function PodUpload({ dispatchId }: { dispatchId: string }) {
   const router = useRouter();
-  const [kind, setKind] = useState<"photo" | "signed_note">("photo");
+  const [stage, setStage] = useState<"pickup" | "delivery">("delivery");
   const [note, setNote] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<FileList | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!files || files.length === 0)
+      return setError("Choose at least one photo.");
     setSaving(true);
     setError(null);
     const fd = new FormData();
     fd.set("dispatch_id", dispatchId);
-    fd.set("kind", kind);
+    fd.set("stage", stage);
     fd.set("note", note);
-    if (file) fd.set("file", file);
+    Array.from(files).forEach((f) => fd.append("files", f));
     const res = await uploadPod(fd);
     setSaving(false);
     if (res.error) return setError(res.error);
     setNote("");
-    setFile(null);
+    setFiles(null);
     router.refresh();
   };
 
@@ -507,21 +510,22 @@ function PodUpload({ dispatchId }: { dispatchId: string }) {
     <form onSubmit={submit} className="space-y-2 border-t pt-3">
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
-          <Label>Type</Label>
+          <Label>Proof for</Label>
           <Select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as "photo" | "signed_note")}
+            value={stage}
+            onChange={(e) => setStage(e.target.value as "pickup" | "delivery")}
           >
-            <option value="photo">Photo</option>
-            <option value="signed_note">Signed note</option>
+            <option value="pickup">Pickup</option>
+            <option value="delivery">Delivery</option>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>File</Label>
+          <Label>Photos (one or more)</Label>
           <Input
             type="file"
-            accept="image/*,application/pdf"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            accept="image/*"
+            multiple
+            onChange={(e) => setFiles(e.target.files)}
           />
         </div>
       </div>
@@ -539,7 +543,7 @@ function PodUpload({ dispatchId }: { dispatchId: string }) {
         </p>
       ) : null}
       <Button type="submit" size="sm" disabled={saving}>
-        <Upload className="h-4 w-4" /> {saving ? "Uploading…" : "Add POD"}
+        <Upload className="h-4 w-4" /> {saving ? "Uploading…" : "Add photos"}
       </Button>
     </form>
   );

@@ -2,18 +2,25 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Upload, MapPin, Check } from "lucide-react";
+import { ArrowRight, Upload, MapPin, Check, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
-import { dispatchStatusVariant } from "@/lib/format";
+import { dispatchStatusVariant, formatDate } from "@/lib/format";
 import { nextDispatchStatus } from "@/lib/dispatch";
 import type { DispatchStatus } from "@/lib/dispatch";
 import { uploadPod } from "../dispatch/actions";
 import { driverAdvanceDispatch } from "./actions";
+
+type Place = {
+  name: string | null;
+  city: string | null;
+  address: string | null;
+  mapsUrl: string | null;
+};
 
 type Item = {
   id: string;
@@ -23,10 +30,20 @@ type Item = {
   hasPod: boolean;
   waybillNo: string | null;
   client: string | null;
-  pickup: string | null;
-  delivery: string | null;
+  pickup: Place;
+  delivery: Place;
+  pickupDate: string | null;
   truck: string | null;
 };
+
+// Prefer the saved Google Maps URL; otherwise build a search link from the
+// place's name/city/address so the driver always gets a clickable location.
+function mapsHref(p: Place): string | null {
+  if (p.mapsUrl) return p.mapsUrl;
+  const q = [p.name, p.city, p.address].filter(Boolean).join(", ");
+  if (!q) return null;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
+}
 
 export function MyDispatches({ items }: { items: Item[] }) {
   if (items.length === 0) {
@@ -45,6 +62,40 @@ export function MyDispatches({ items }: { items: Item[] }) {
   );
 }
 
+function PlaceBlock({
+  label,
+  place,
+  color,
+}: {
+  label: string;
+  place: Place;
+  color: string;
+}) {
+  const href = mapsHref(place);
+  return (
+    <div className="flex items-start gap-2">
+      <MapPin className={`mt-0.5 h-4 w-4 shrink-0 ${color}`} />
+      <div className="min-w-0">
+        <p className="text-xs uppercase text-muted-foreground">{label}</p>
+        <p className="font-medium">{place.name || place.address || "—"}</p>
+        {place.city ? (
+          <p className="text-sm text-muted-foreground">{place.city}</p>
+        ) : null}
+        {href ? (
+          <a
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-0.5 inline-flex items-center gap-1 text-sm text-brand-blue hover:underline"
+          >
+            <ExternalLink className="h-3.5 w-3.5" /> Open in Google Maps
+          </a>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function DispatchCard({ item }: { item: Item }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
@@ -52,7 +103,10 @@ function DispatchCard({ item }: { item: Item }) {
   const [showPod, setShowPod] = useState(false);
 
   const next = nextDispatchStatus(item.status);
+  // Drivers finish at "Delivered"; the office handles "Confirmed".
+  const showAdvance = next != null && next !== "Confirmed";
   const deliverNeedsPod = next === "Delivered" && !item.hasPod;
+  const isDelivered = item.status === "Delivered" || item.status === "Confirmed";
 
   const advance = async () => {
     setPending(true);
@@ -86,24 +140,17 @@ function DispatchCard({ item }: { item: Item }) {
         </div>
       </div>
 
-      <div className="mt-3 space-y-2 text-sm">
-        <div className="flex items-start gap-2">
-          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-green-600" />
-          <div>
-            <p className="text-xs uppercase text-muted-foreground">Pickup</p>
-            <p>{item.pickup ?? "—"}</p>
-          </div>
-        </div>
-        <div className="flex items-start gap-2">
-          <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
-          <div>
-            <p className="text-xs uppercase text-muted-foreground">Delivery</p>
-            <p>{item.delivery ?? "—"}</p>
-          </div>
-        </div>
-        {item.truck ? (
-          <p className="text-xs text-muted-foreground">Truck: {item.truck}</p>
-        ) : null}
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <PlaceBlock label="Pickup" place={item.pickup} color="text-green-600" />
+        <PlaceBlock
+          label="Delivery"
+          place={item.delivery}
+          color="text-brand-blue"
+        />
+      </div>
+      <div className="mt-2 space-y-1 text-xs text-muted-foreground">
+        {item.pickupDate ? <p>Pickup date: {formatDate(item.pickupDate)}</p> : null}
+        {item.truck ? <p>Truck: {item.truck}</p> : null}
       </div>
 
       {error ? (
@@ -113,22 +160,19 @@ function DispatchCard({ item }: { item: Item }) {
       ) : null}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        {next ? (
+        {showAdvance ? (
           <Button
             disabled={pending || deliverNeedsPod}
-            title={deliverNeedsPod ? "Upload a POD first" : undefined}
+            title={deliverNeedsPod ? "Upload delivery proof first" : undefined}
             onClick={advance}
           >
             Mark as {next} <ArrowRight className="h-4 w-4" />
           </Button>
-        ) : (
+        ) : isDelivered ? (
           <Badge variant="success">Delivered</Badge>
-        )}
-        <Button
-          variant="outline"
-          onClick={() => setShowPod((v) => !v)}
-        >
-          <Upload className="h-4 w-4" /> Proof of delivery
+        ) : null}
+        <Button variant="outline" onClick={() => setShowPod((v) => !v)}>
+          <Upload className="h-4 w-4" /> Upload photos
         </Button>
       </div>
 
@@ -152,21 +196,23 @@ function PodForm({
   dispatchId: string;
   onDone: () => void;
 }) {
-  const [kind, setKind] = useState<"photo" | "signed_note">("photo");
+  const [stage, setStage] = useState<"pickup" | "delivery">("delivery");
   const [note, setNote] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<FileList | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!files || files.length === 0)
+      return setError("Choose at least one photo.");
     setSaving(true);
     setError(null);
     const fd = new FormData();
     fd.set("dispatch_id", dispatchId);
-    fd.set("kind", kind);
+    fd.set("stage", stage);
     fd.set("note", note);
-    if (file) fd.set("file", file);
+    Array.from(files).forEach((f) => fd.append("files", f));
     const res = await uploadPod(fd);
     setSaving(false);
     if (res.error) return setError(res.error);
@@ -177,22 +223,23 @@ function PodForm({
     <form onSubmit={submit} className="mt-3 space-y-2 border-t pt-3">
       <div className="grid grid-cols-2 gap-2">
         <div className="space-y-1.5">
-          <Label>Type</Label>
+          <Label>Proof for</Label>
           <Select
-            value={kind}
-            onChange={(e) => setKind(e.target.value as "photo" | "signed_note")}
+            value={stage}
+            onChange={(e) => setStage(e.target.value as "pickup" | "delivery")}
           >
-            <option value="photo">Photo</option>
-            <option value="signed_note">Signed note</option>
+            <option value="pickup">Pickup</option>
+            <option value="delivery">Delivery</option>
           </Select>
         </div>
         <div className="space-y-1.5">
-          <Label>Photo / file</Label>
+          <Label>Photos (one or more)</Label>
           <Input
             type="file"
-            accept="image/*,application/pdf"
+            accept="image/*"
             capture="environment"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            multiple
+            onChange={(e) => setFiles(e.target.files)}
           />
         </div>
       </div>
@@ -210,7 +257,7 @@ function PodForm({
         </p>
       ) : null}
       <Button type="submit" size="sm" disabled={saving}>
-        <Check className="h-4 w-4" /> {saving ? "Uploading…" : "Save POD"}
+        <Check className="h-4 w-4" /> {saving ? "Uploading…" : "Save photos"}
       </Button>
     </form>
   );

@@ -72,7 +72,7 @@ export async function deleteDriver(id: string): Promise<Result> {
   return {};
 }
 
-// --- Suppliers (+ truck types) ------------------------------------------------
+// --- Suppliers (+ service types) ----------------------------------------------
 export async function saveSupplier(
   input: unknown,
   id?: string,
@@ -81,7 +81,7 @@ export async function saveSupplier(
   if (!parsed.success)
     return { error: parsed.error.issues[0]?.message ?? "Invalid input" };
   const supabase = await db();
-  const { truck_type_ids, ...core } = parsed.data;
+  const { service_type_ids, ...core } = parsed.data;
 
   let supplierId = id;
   if (id) {
@@ -99,16 +99,16 @@ export async function saveSupplier(
 
   if (supplierId) {
     await supabase
-      .from("supplier_truck_types")
+      .from("supplier_service_types")
       .delete()
       .eq("supplier_id", supplierId);
-    if (truck_type_ids.length > 0) {
-      const rows = truck_type_ids.map((tt) => ({
+    if (service_type_ids.length > 0) {
+      const rows = service_type_ids.map((st) => ({
         supplier_id: supplierId!,
-        truck_type_id: tt,
+        service_type_id: st,
       }));
       const { error } = await supabase
-        .from("supplier_truck_types")
+        .from("supplier_service_types")
         .insert(rows);
       if (error) return { error: error.message };
     }

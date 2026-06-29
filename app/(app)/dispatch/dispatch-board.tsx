@@ -14,15 +14,37 @@ import { Dialog } from "@/components/ui/dialog";
 import { Card } from "@/components/ui/card";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { SearchableSelect } from "@/components/app/searchable-select";
+import {
+  DataFilter,
+  matchesFilters,
+  ANY_COLUMN,
+  type ActiveFilter,
+  type FilterColumn,
+} from "@/components/app/data-filter";
 import { formatDate, dispatchStatusVariant } from "@/lib/format";
 import { createDispatch } from "./actions";
+
+const DISPATCH_FILTER_COLUMNS: FilterColumn[] = [
+  { key: "request_no", label: "Request #" },
+  { key: "client", label: "Client" },
+  { key: "who", label: "Assigned to" },
+  { key: "route", label: "Route" },
+  { key: "status", label: "Status" },
+];
+const boardFilterValue = (r: BoardItem, column: string) => {
+  if (column === ANY_COLUMN)
+    return DISPATCH_FILTER_COLUMNS.map(
+      (c) => String((r as Record<string, unknown>)[c.key] ?? ""),
+    ).join(" ");
+  return String((r as Record<string, unknown>)[column] ?? "");
+};
 
 type Awaiting = {
   id: string;
   request_no: string;
   client: string;
   route: string;
-  truckType: string;
+  serviceType: string;
   deliveryDate: string | null;
   routeId: string | null;
   serviceTypeId: string | null;
@@ -40,12 +62,12 @@ type BoardItem = {
 type Truck = {
   id: string;
   label: string;
-  truck_type_id: string | null;
-  truck_type: string;
+  service_type_id: string | null;
+  service_type: string;
   default_driver_id: string | null;
 };
 type Lookup = { id: string; name: string };
-type SupplierType = { supplier_id: string; truck_type_id: string };
+type SupplierType = { supplier_id: string; service_type_id: string };
 type SupplierTruck = {
   id: string;
   supplier_id: string;
@@ -53,7 +75,7 @@ type SupplierTruck = {
   driver_name: string | null;
   driver_id_no: string | null;
   driver_mobile: string | null;
-  truck_type_id: string | null;
+  service_type_id: string | null;
 };
 type SupplierRate = {
   supplier_id: string;
@@ -68,7 +90,7 @@ export function DispatchBoard({
   trucks,
   drivers,
   suppliers,
-  truckTypes,
+  serviceTypes,
   supplierTypes,
   supplierTrucks,
   supplierRates,
@@ -78,22 +100,18 @@ export function DispatchBoard({
   trucks: Truck[];
   drivers: Lookup[];
   suppliers: Lookup[];
-  truckTypes: Lookup[];
+  serviceTypes: Lookup[];
   supplierTypes: SupplierType[];
   supplierTrucks: SupplierTruck[];
   supplierRates: SupplierRate[];
 }) {
   const [target, setTarget] = useState<Awaiting | null>(null);
-  const [dispQuery, setDispQuery] = useState("");
+  const [dispFilters, setDispFilters] = useState<ActiveFilter[]>([]);
   const [dispStatus, setDispStatus] = useState("");
 
   const filteredDispatches = dispatches.filter((d) => {
     if (dispStatus && d.status !== dispStatus) return false;
-    const q = dispQuery.trim().toLowerCase();
-    if (!q) return true;
-    return [d.request_no, d.client, d.who, d.route, d.status].some((v) =>
-      String(v ?? "").toLowerCase().includes(q),
-    );
+    return matchesFilters(d, dispFilters, boardFilterValue);
   });
   const DISPATCH_STATUSES = [
     "Assigned",
@@ -120,7 +138,7 @@ export function DispatchBoard({
                 <TH>Request #</TH>
                 <TH>Client</TH>
                 <TH>Route</TH>
-                <TH>Truck type</TH>
+                <TH>Service type</TH>
                 <TH>Delivery date</TH>
                 <TH></TH>
               </TR>
@@ -138,7 +156,7 @@ export function DispatchBoard({
                     <TD className="font-medium">{r.request_no}</TD>
                     <TD>{r.client}</TD>
                     <TD className="text-sm text-muted-foreground">{r.route}</TD>
-                    <TD>{r.truckType}</TD>
+                    <TD>{r.serviceType}</TD>
                     <TD>{formatDate(r.deliveryDate)}</TD>
                     <TD className="text-right">
                       <Button size="sm" onClick={() => setTarget(r)}>
@@ -161,26 +179,25 @@ export function DispatchBoard({
               {filteredDispatches.length}
             </span>
           </h2>
-          <div className="flex flex-wrap gap-2">
-            <Input
-              value={dispQuery}
-              onChange={(e) => setDispQuery(e.target.value)}
-              placeholder="Search truck, driver, client, destination, request…"
-              className="sm:w-72"
-            />
-            <Select
-              value={dispStatus}
-              onChange={(e) => setDispStatus(e.target.value)}
-              className="sm:w-40"
-            >
-              <option value="">All statuses</option>
-              {DISPATCH_STATUSES.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </Select>
-          </div>
+          <Select
+            value={dispStatus}
+            onChange={(e) => setDispStatus(e.target.value)}
+            className="sm:w-40"
+          >
+            <option value="">All statuses</option>
+            {DISPATCH_STATUSES.map((st) => (
+              <option key={st} value={st}>
+                {st}
+              </option>
+            ))}
+          </Select>
+        </div>
+        <div className="mb-3">
+          <DataFilter
+            columns={DISPATCH_FILTER_COLUMNS}
+            filters={dispFilters}
+            onChange={setDispFilters}
+          />
         </div>
         <Card className="p-0">
           <Table>
@@ -236,7 +253,7 @@ export function DispatchBoard({
           trucks={trucks}
           drivers={drivers}
           suppliers={suppliers}
-          truckTypes={truckTypes}
+          serviceTypes={serviceTypes}
           supplierTypes={supplierTypes}
           supplierTrucks={supplierTrucks}
           supplierRates={supplierRates}
@@ -252,7 +269,7 @@ function DispatchDialog({
   trucks,
   drivers,
   suppliers,
-  truckTypes,
+  serviceTypes,
   supplierTypes,
   supplierTrucks,
   supplierRates,
@@ -262,7 +279,7 @@ function DispatchDialog({
   trucks: Truck[];
   drivers: Lookup[];
   suppliers: Lookup[];
-  truckTypes: Lookup[];
+  serviceTypes: Lookup[];
   supplierTypes: SupplierType[];
   supplierTrucks: SupplierTruck[];
   supplierRates: SupplierRate[];
@@ -277,7 +294,7 @@ function DispatchDialog({
   const [supplierPlate, setSupplierPlate] = useState("");
   const [outDriverName, setOutDriverName] = useState("");
   const [outDriverId, setOutDriverId] = useState("");
-  const [truckTypeId, setTruckTypeId] = useState("");
+  const [serviceTypeId, setServiceTypeId] = useState("");
   const [carrierCost, setCarrierCost] = useState("");
   const [customerCharge, setCustomerCharge] = useState(
     request.sellingPrice != null ? request.sellingPrice.toString() : "",
@@ -319,12 +336,12 @@ function DispatchDialog({
     setSupplierPlate("");
     setOutDriverName("");
     setOutDriverId("");
-    setTruckTypeId("");
+    setServiceTypeId("");
     const match = id ? matchCarrierCost(id) : null;
     setCarrierCost(match ? match.rate.toString() : "");
   };
 
-  // Selecting a plate auto-fills driver + truck type (all editable).
+  // Selecting a plate auto-fills driver + service type (all editable).
   const onPlateChange = (stId: string) => {
     setSupplierTruckId(stId);
     const t = supplierPlates.find((x) => x.id === stId);
@@ -332,20 +349,20 @@ function DispatchDialog({
       setSupplierPlate(t.plate_number);
       setOutDriverName(t.driver_name ?? "");
       setOutDriverId(t.driver_id_no ?? "");
-      setTruckTypeId(t.truck_type_id ?? "");
+      setServiceTypeId(t.service_type_id ?? "");
     }
   };
 
-  // Constrain outsourced truck types to what the supplier offers (if any).
+  // Constrain outsourced service types to what the supplier offers (if any).
   const offered = supplierId
     ? supplierTypes
         .filter((s) => s.supplier_id === supplierId)
-        .map((s) => s.truck_type_id)
+        .map((s) => s.service_type_id)
     : [];
   const typeOptions =
     offered.length > 0
-      ? truckTypes.filter((t) => offered.includes(t.id))
-      : truckTypes;
+      ? serviceTypes.filter((t) => offered.includes(t.id))
+      : serviceTypes;
 
   const submit = async () => {
     setError(null);
@@ -362,7 +379,7 @@ function DispatchDialog({
       outsourced_driver_name:
         assignment === "outsourced" ? outDriverName : null,
       outsourced_driver_id: assignment === "outsourced" ? outDriverId : null,
-      truck_type_id: assignment === "outsourced" ? truckTypeId : null,
+      service_type_id: assignment === "outsourced" ? serviceTypeId : null,
       carrier_cost: assignment === "outsourced" ? carrierCost : "",
       customer_charge: customerCharge,
       notes,
@@ -406,7 +423,7 @@ function DispatchDialog({
                 options={trucks.map((t) => ({
                   value: t.id,
                   label: t.label,
-                  hint: t.truck_type,
+                  hint: t.service_type,
                 }))}
                 value={truckId}
                 onChange={onTruckChange}
@@ -414,7 +431,7 @@ function DispatchDialog({
               />
               {selectedTruck ? (
                 <p className="text-xs text-muted-foreground">
-                  Truck type: {selectedTruck.truck_type}
+                  Service type: {selectedTruck.service_type}
                 </p>
               ) : null}
             </div>
@@ -480,10 +497,10 @@ function DispatchDialog({
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Truck type</Label>
+              <Label>Service type</Label>
               <Select
-                value={truckTypeId}
-                onChange={(e) => setTruckTypeId(e.target.value)}
+                value={serviceTypeId}
+                onChange={(e) => setServiceTypeId(e.target.value)}
               >
                 <option value="">— Select —</option>
                 {typeOptions.map((t) => (

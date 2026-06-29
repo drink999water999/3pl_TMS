@@ -19,7 +19,7 @@ export default async function MyDispatchesPage() {
     supabase
       .from("waybills")
       .select(
-        "dispatch_id, waybill_no, client_name, pickup_address, delivery_address, truck_number",
+        "dispatch_id, waybill_no, client_name, pickup_address, pickup_name, pickup_city, pickup_maps_url, delivery_address, delivery_city, delivery_maps_url, receiver_name, pickup_date, truck_number",
       ),
     supabase.from("pods").select("dispatch_id"),
   ]);
@@ -39,8 +39,19 @@ export default async function MyDispatchesPage() {
       hasPod: podSet.has(d.id),
       waybillNo: wb?.waybill_no ?? null,
       client: wb?.client_name ?? null,
-      pickup: wb?.pickup_address ?? null,
-      delivery: wb?.delivery_address ?? null,
+      pickup: {
+        name: wb?.pickup_name ?? null,
+        city: wb?.pickup_city ?? null,
+        address: wb?.pickup_address ?? null,
+        mapsUrl: wb?.pickup_maps_url ?? null,
+      },
+      delivery: {
+        name: wb?.receiver_name ?? null,
+        city: wb?.delivery_city ?? null,
+        address: wb?.delivery_address ?? null,
+        mapsUrl: wb?.delivery_maps_url ?? null,
+      },
+      pickupDate: wb?.pickup_date ?? null,
       truck: wb?.truck_number ?? null,
     };
   });

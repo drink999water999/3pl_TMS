@@ -3,11 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireRole } from "@/lib/auth";
-import {
-  dispatchSchema,
-  exceptionSchema,
-  podKindSchema,
-} from "@/lib/validation";
+import { dispatchSchema, exceptionSchema } from "@/lib/validation";
 import { nextDispatchStatus, type DispatchStatus } from "@/lib/dispatch";
 import { priceWaybill } from "@/lib/pricing-server";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -54,10 +50,10 @@ export async function createDispatch(
 
   let row: TablesInsert<"dispatches">;
   if (v.assignment_type === "own") {
-    // Auto-fetch the truck's type so the waybill snapshot is authoritative.
+    // Auto-fetch the truck's service type so the waybill snapshot is authoritative.
     const { data: truck } = await supabase
       .from("trucks")
-      .select("truck_type_id")
+      .select("service_type_id")
       .eq("id", v.truck_id as string)
       .maybeSingle();
     row = {
@@ -65,7 +61,7 @@ export async function createDispatch(
       assignment_type: "own",
       truck_id: v.truck_id,
       driver_id: v.driver_id,
-      truck_type_id: truck?.truck_type_id ?? v.truck_type_id,
+      service_type_id: truck?.service_type_id ?? v.service_type_id,
       carrier_cost: null, // own fleet has no carrier cost
       customer_charge: v.customer_charge,
       notes: v.notes,
@@ -81,7 +77,7 @@ export async function createDispatch(
       supplier_truck_id: v.supplier_truck_id,
       outsourced_driver_name: v.outsourced_driver_name,
       outsourced_driver_id: v.outsourced_driver_id,
-      truck_type_id: v.truck_type_id,
+      service_type_id: v.service_type_id,
       carrier_cost: v.carrier_cost,
       customer_charge: v.customer_charge,
       notes: v.notes,
@@ -299,18 +295,35 @@ export async function uploadPod(formData: FormData): Promise<Result> {
 
   const dispatchId = String(formData.get("dispatch_id") ?? "");
   if (!dispatchId) return { error: "Missing dispatch." };
-  const kindParse = podKindSchema.safeParse(formData.get("kind"));
-  if (!kindParse.success) return { error: "Choose a POD type." };
-  const kind = kindParse.data;
-  const note = String(formData.get("note") ?? "").trim();
-  const file = formData.get("file");
 
-  let storagePath: string | null = null;
-  if (file instanceof File && file.size > 0) {
-    const ext = file.name.includes(".")
-      ? file.name.split(".").pop()
-      : "bin";
-    storagePath = `${dispatchId}/${crypto.randomUUID()}.${ext}`;
+  // Proof is always photo-based now (signed note removed). A POD can be tagged
+  // as pickup or delivery proof, and multiple photos can be attached at once.
+  const stageRaw = String(formData.get("stage") ?? "delivery");
+  const stage = stageRaw === "pickup" ? "pickup" : "delivery";
+  const note = String(formData.get("note") ?? "").trim();
+
+  // Support multiple files ("files") with a single-file fallback ("file").
+  const files = [
+    ...formData.getAll("files"),
+    ...(formData.get("file") ? [formData.get("file")] : []),
+  ].filter((f): f is File => f instanceof File && f.size > 0);
+
+  if (files.length === 0)
+    return { error: "Attach at least one photo." };
+
+  const rows: {
+    dispatch_id: string;
+    kind: "photo";
+    stage: string;
+    storage_path: string;
+    note: string | null;
+    uploaded_by: string;
+  }[] = [];
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const ext = file.name.includes(".") ? file.name.split(".").pop() : "bin";
+    const storagePath = `${dispatchId}/${crypto.randomUUID()}.${ext}`;
     const bytes = Buffer.from(await file.arrayBuffer());
     const { error: upErr } = await supabase.storage
       .from("pods")
@@ -319,20 +332,17 @@ export async function uploadPod(formData: FormData): Promise<Result> {
         upsert: false,
       });
     if (upErr) return { error: upErr.message };
+    rows.push({
+      dispatch_id: dispatchId,
+      kind: "photo",
+      stage,
+      storage_path: storagePath,
+      note: i === 0 ? note || null : null,
+      uploaded_by: profile.id,
+    });
   }
 
-  if (kind === "photo" && !storagePath)
-    return { error: "A photo POD needs an image file." };
-  if (!storagePath && !note)
-    return { error: "Attach a file or write a note." };
-
-  const { error } = await supabase.from("pods").insert({
-    dispatch_id: dispatchId,
-    kind,
-    storage_path: storagePath,
-    note: note || null,
-    uploaded_by: profile.id,
-  });
+  const { error } = await supabase.from("pods").insert(rows);
   if (error) return { error: error.message };
 
   revalidatePath(`/dispatch/${dispatchId}`);
