@@ -5,7 +5,7 @@ const nextConfig = {
     // @react-pdf/renderer must stay a runtime Node require, not webpack-bundled,
     // or the PDF renderer breaks during `next build` (Next 14 puts this under
     // experimental; it becomes top-level serverExternalPackages in Next 15).
-    serverComponentsExternalPackages: ["@react-pdf/renderer"],
+    serverComponentsExternalPackages: ["@react-pdf/renderer", "nodemailer"],
     serverActions: {
       bodySizeLimit: "10mb",
     },

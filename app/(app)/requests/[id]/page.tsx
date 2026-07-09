@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { toRequiredMap } from "@/lib/request-fields";
 import { RequestDetail } from "./request-detail";
 
 export const metadata = { title: "Request" };
@@ -39,6 +40,7 @@ export default async function RequestDetailPage({
     clientRow,
     contractRatesRes,
     standardRatesRes,
+    fieldConfig,
   ] = await Promise.all([
     supabase
       .from("request_items")
@@ -113,6 +115,7 @@ export default async function RequestDetailPage({
       .select("service_type_id, route_id, rate, currency")
       .eq("is_active", true)
       .is("deleted_at", null),
+    supabase.from("request_field_config").select("field_key, required"),
   ]);
   const clientMultiCharge: Record<string, number> = {};
   if (request.client_id)
@@ -254,6 +257,7 @@ export default async function RequestDetailPage({
       clientMultiCharge={clientMultiCharge}
       canSetPricing={!isClient}
       isClient={isClient}
+      requiredFields={toRequiredMap(fieldConfig.data)}
       lockClientId={lockClientId}
       dispatchInfo={dispatchInfo}
       comments={comments}

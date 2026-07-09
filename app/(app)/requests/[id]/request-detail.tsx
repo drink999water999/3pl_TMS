@@ -24,6 +24,7 @@ import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatDate, formatMoney, requestStatusVariant } from "@/lib/format";
 import { computeSelling } from "@/lib/selling-price";
 import type { Tables } from "@/lib/database.types";
+import type { RequiredFields } from "@/lib/request-fields";
 import { RequestForm } from "../request-form";
 import {
   saveItem,
@@ -124,6 +125,7 @@ export function RequestDetail({
   clientMultiCharge = {},
   canSetPricing = false,
   isClient = false,
+  requiredFields = {},
   lockClientId,
   dispatchInfo,
   comments,
@@ -148,6 +150,7 @@ export function RequestDetail({
   clientMultiCharge?: Record<string, number>;
   canSetPricing?: boolean;
   isClient?: boolean;
+  requiredFields?: RequiredFields;
   lockClientId?: string | null;
   dispatchInfo?: DispatchInfo;
   comments?: Comment[];
@@ -235,6 +238,7 @@ export function RequestDetail({
           clientMultiCharge={clientMultiCharge}
           canSetPricing={canSetPricing}
           isClient={isClient}
+          requiredFields={requiredFields}
           lockClientId={lockClientId}
           onDone={() => setEditing(false)}
           onCancel={() => setEditing(false)}

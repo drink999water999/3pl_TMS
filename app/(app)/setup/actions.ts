@@ -26,6 +26,24 @@ function paths() {
   }
 }
 
+// --- Request field config (which request fields are mandatory) ----------------
+export async function saveRequestFieldConfig(
+  fieldKey: string,
+  required: boolean,
+): Promise<Result> {
+  const { profile } = await requireRole(["admin"]);
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("request_field_config")
+    .upsert(
+      { field_key: fieldKey, required, updated_by: profile.id, updated_at: nowIso() },
+      { onConflict: "field_key" },
+    );
+  if (error) return { error: error.message };
+  paths();
+  return {};
+}
+
 // --- Cities -------------------------------------------------------------------
 export async function saveCity(input: unknown, id?: string): Promise<Result> {
   const parsed = citySchema.safeParse(input);

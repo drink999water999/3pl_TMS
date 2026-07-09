@@ -14,6 +14,7 @@ import { SearchableSelect } from "@/components/app/searchable-select";
 import { formatMoney } from "@/lib/format";
 import { computeSelling } from "@/lib/selling-price";
 import type { Tables } from "@/lib/database.types";
+import { REQUEST_FIELD_DEFS, type RequiredFields } from "@/lib/request-fields";
 import { createRequest, updateRequest } from "./actions";
 
 type Lookup = { id: string; name: string };
@@ -91,6 +92,7 @@ export function RequestForm({
   clientMultiCharge = {},
   canSetPricing = false,
   isClient = false,
+  requiredFields = {},
   lockClientId,
   onDone,
   onCancel,
@@ -111,11 +113,13 @@ export function RequestForm({
   clientMultiCharge?: Record<string, number>;
   canSetPricing?: boolean;
   isClient?: boolean;
+  requiredFields?: RequiredFields;
   lockClientId?: string | null;
   onDone?: () => void;
   onCancel?: () => void;
 }) {
   const router = useRouter();
+  const req = (key: string) => requiredFields[key as keyof RequiredFields] === true;
 
   const [clientId, setClientId] = useState<string | null>(
     request?.client_id ?? lockClientId ?? null,
@@ -329,6 +333,16 @@ export function RequestForm({
     const cleanStops = stops.filter((s) => s.location_id);
     if (cleanStops.length === 0)
       return setError("Add at least one delivery location.");
+
+    // Enforce admin-configured mandatory fields. Quantity only counts when the
+    // selected service actually asks for it.
+    for (const def of REQUEST_FIELD_DEFS) {
+      if (!req(def.key)) continue;
+      if (def.key === "quantity" && !needsQuantity) continue;
+      const value = (values as Record<string, string>)[def.key];
+      if (!value || value.trim() === "")
+        return setError(`${def.label} is required.`);
+    }
     setSaving(true);
 
     const payload = {
@@ -398,11 +412,11 @@ export function RequestForm({
               />
             )}
           </Field>
-          <Field label="PO reference">
+          <Field label="PO reference" required={req("po_reference")}>
             <Input {...register("po_reference")} placeholder="Optional" />
           </Field>
 
-          <Field label="Service type">
+          <Field label="Service type" required={req("service_type_id")}>
             <Select {...register("service_type_id")}>
               <option value="">— None —</option>
               {serviceTypes.map((s) => (
@@ -413,7 +427,7 @@ export function RequestForm({
             </Select>
           </Field>
 
-          <Field label="Shipment type">
+          <Field label="Shipment type" required={req("shipment_type_id")}>
             <Select {...register("shipment_type_id")}>
               <option value="">— None —</option>
               {shipmentTypes.map((s) => (
@@ -563,17 +577,17 @@ export function RequestForm({
 
         <div className="grid gap-4 sm:grid-cols-3">
           {needsQuantity ? (
-            <Field label="Quantity">
+            <Field label="Quantity" required={req("quantity")}>
               <Input type="number" step="0.01" {...register("quantity")} />
               <p className="text-xs text-muted-foreground">
                 Applies to {activeService?.name} service.
               </p>
             </Field>
           ) : null}
-          <Field label="Weight">
+          <Field label="Weight" required={req("weight")}>
             <Input type="number" step="0.01" {...register("weight")} />
           </Field>
-          <Field label="Distance (km)">
+          <Field label="Distance (km)" required={req("distance_km")}>
             <Input
               type="number"
               step="0.1"
@@ -586,22 +600,31 @@ export function RequestForm({
                 : "Set a pickup + delivery with cities on a defined route to auto-fill."}
             </p>
           </Field>
-          <Field label="Required pickup (date & time)">
+          <Field
+            label="Required pickup (date & time)"
+            required={req("required_pickup_at")}
+          >
             <Input type="datetime-local" {...register("required_pickup_at")} />
           </Field>
-          <Field label="Delivery date">
+          <Field label="Delivery date" required={req("delivery_date")}>
             <Input type="date" {...register("delivery_date")} />
           </Field>
         </div>
 
-        <Field label="Additional services">
+        <Field
+          label="Additional services"
+          required={req("additional_services")}
+        >
           <Textarea
             {...register("additional_services")}
             placeholder="Loading/unloading, waiting time, packaging, etc."
           />
         </Field>
 
-        <Field label="Special instructions">
+        <Field
+          label="Special instructions"
+          required={req("special_instructions")}
+        >
           <Textarea
             {...register("special_instructions")}
             placeholder="Handling notes, access details, etc."

@@ -23,6 +23,28 @@ export async function driverAdvanceDispatch(
 
   const { profile } = await requireRole(["driver"]);
   const supabase = await createClient();
+
+  // Own-fleet trips require a pickup photo before they can be marked "Picked Up".
+  if (to === "Picked Up") {
+    const { data: disp } = await supabase
+      .from("dispatches")
+      .select("assignment_type")
+      .eq("id", id)
+      .maybeSingle();
+    if (disp?.assignment_type === "own") {
+      const { count } = await supabase
+        .from("pods")
+        .select("id", { count: "exact", head: true })
+        .eq("dispatch_id", id)
+        .eq("stage", "pickup");
+      if (!count || count === 0)
+        return {
+          error:
+            "Upload a pickup photo before marking this own-fleet trip as picked up.",
+        };
+    }
+  }
+
   const { data, error } = await supabase
     .from("dispatches")
     .update({ status: to, updated_by: profile.id })
@@ -52,5 +74,6 @@ export async function driverAdvanceDispatch(
   }
 
   revalidatePath("/my-dispatches");
+  revalidatePath("/current-delivery");
   return {};
 }

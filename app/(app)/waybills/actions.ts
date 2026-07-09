@@ -2,13 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { renderToBuffer } from "@react-pdf/renderer";
-import { Resend } from "resend";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { priceWaybill } from "@/lib/pricing-server";
 import { requireRole } from "@/lib/auth";
 import { APP_NAME } from "@/lib/constants";
 import { waybillDocument } from "@/lib/waybill-document";
+import { sendEmail } from "@/lib/email";
 import { amendWaybillSchema, creditNoteSchema } from "@/lib/validation";
 
 type Result = { error?: string };
@@ -318,13 +318,6 @@ export async function emailWaybill(id: string, to: string): Promise<Result> {
   await requireRole(["admin", "operations", "dispatch", "client"]);
   const supabase = await createClient();
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey)
-    return {
-      error:
-        "Email isn't configured. Add RESEND_API_KEY and RESEND_FROM_EMAIL to .env.local to enable sending.",
-    };
-
   const email = (to ?? "").trim();
   if (!email) return { error: "Enter a recipient email address." };
 
@@ -352,12 +345,9 @@ export async function emailWaybill(id: string, to: string): Promise<Result> {
   if (dlErr || !file) return { error: dlErr?.message ?? "Could not read the PDF." };
   const content = Buffer.from(await file.arrayBuffer());
 
-  const resend = new Resend(apiKey);
-  const from =
-    process.env.RESEND_FROM_EMAIL ??
-    "FastLane Logistics <onboarding@resend.dev>";
-  const { error: sendErr } = await resend.emails.send({
-    from,
+  // Provider is chosen from env (Gmail / SMTP / Resend). sendEmail returns a
+  // friendly setup message if nothing is configured yet.
+  const res = await sendEmail({
     to: email,
     subject: `Waybill ${wb.waybill_no}`,
     text: `Please find attached waybill ${wb.waybill_no} for ${
@@ -367,7 +357,7 @@ export async function emailWaybill(id: string, to: string): Promise<Result> {
       { filename: rec.file_name ?? `${wb.waybill_no}.pdf`, content },
     ],
   });
-  if (sendErr) return { error: sendErr.message };
+  if (res.error) return res;
 
   revalidatePath(`/waybills/${id}`);
   return {};

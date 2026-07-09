@@ -139,6 +139,9 @@ export default async function ReportsPage() {
       .sort((a, b) => a.label.localeCompare(b.label));
   };
 
+  const truckOptions = optionsFrom(
+    rows.map((r) => ({ id: r.truckId, name: r.truckLabel })),
+  );
   const driverOptions = optionsFrom(
     rows.map((r) => ({ id: r.driverId, name: r.driver })),
   );
@@ -163,6 +166,7 @@ export default async function ReportsPage() {
       />
       <ReportsView
         rows={rows}
+        truckOptions={truckOptions}
         driverOptions={driverOptions}
         clientOptions={clientOptions}
         supplierOptions={supplierOptions}

@@ -88,6 +88,7 @@ const distinct = (vals: string[]): Option[] =>
 
 export function ReportsView({
   rows,
+  truckOptions,
   driverOptions,
   clientOptions,
   supplierOptions,
@@ -95,6 +96,7 @@ export function ReportsView({
   statusOptions,
 }: {
   rows: DeliveryRow[];
+  truckOptions: Option[];
   driverOptions: Option[];
   clientOptions: Option[];
   supplierOptions: Option[];
@@ -105,6 +107,7 @@ export function ReportsView({
   const [dateBasis, setDateBasis] = useState<DateBasis>("deliveredDate");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [truck, setTruck] = useState("");
   const [driver, setDriver] = useState("");
   const [client, setClient] = useState("");
   const [supplier, setSupplier] = useState("");
@@ -122,6 +125,7 @@ export function ReportsView({
       const d = r[dateBasis];
       if (from && (!d || d < from)) return false;
       if (to && (!d || d > to)) return false;
+      if (truck && r.truckId !== truck) return false;
       if (driver && r.driverId !== driver) return false;
       if (client && r.clientId !== client) return false;
       if (supplier && r.supplierId !== supplier) return false;
@@ -137,6 +141,7 @@ export function ReportsView({
     dateBasis,
     from,
     to,
+    truck,
     driver,
     client,
     supplier,
@@ -167,6 +172,7 @@ export function ReportsView({
   const hasFilters =
     !!from ||
     !!to ||
+    !!truck ||
     !!driver ||
     !!client ||
     !!supplier ||
@@ -179,6 +185,7 @@ export function ReportsView({
   const reset = () => {
     setFrom("");
     setTo("");
+    setTruck("");
     setDriver("");
     setClient("");
     setSupplier("");
@@ -246,6 +253,16 @@ export function ReportsView({
               value={to}
               onChange={(e) => setTo(e.target.value)}
             />
+          </Field>
+          <Field label="Truck code">
+            <Select value={truck} onChange={(e) => setTruck(e.target.value)}>
+              <option value="">All trucks</option>
+              {truckOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="Driver">
             <Select value={driver} onChange={(e) => setDriver(e.target.value)}>

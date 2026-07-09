@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, THead, TBody, TR, TH, TD } from "@/components/ui/table";
 import { formatMoney } from "@/lib/format";
 import type { Tables } from "@/lib/database.types";
+import { REQUEST_FIELD_DEFS } from "@/lib/request-fields";
 import {
   saveCity,
   deleteCity,
@@ -22,18 +23,21 @@ import {
   deleteServiceType,
   saveStandardRate,
   deleteStandardRate,
+  saveRequestFieldConfig,
 } from "./actions";
 
 type City = Tables<"cities">;
 type Route = Tables<"routes">;
 type ServiceType = Tables<"service_types">;
 type StandardRate = Tables<"standard_rates">;
+type FieldConfig = { field_key: string; required: boolean };
 
 const TABS = [
   { key: "cities", label: "Cities" },
   { key: "routes", label: "Routes" },
   { key: "services", label: "Service Types" },
   { key: "rates", label: "Standard Rates" },
+  { key: "fields", label: "Request Fields" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -42,11 +46,13 @@ export function SetupTabs({
   routes,
   serviceTypes,
   standardRates,
+  fieldConfig,
 }: {
   cities: City[];
   routes: Route[];
   serviceTypes: ServiceType[];
   standardRates: StandardRate[];
+  fieldConfig: FieldConfig[];
 }) {
   const [tab, setTab] = useState<TabKey>("cities");
   const cityById = useMemo(
@@ -97,6 +103,79 @@ export function SetupTabs({
           serviceById={serviceById}
         />
       )}
+      {tab === "fields" && <RequestFieldsTab config={fieldConfig} />}
+    </div>
+  );
+}
+
+// --- Request Fields tab -------------------------------------------------------
+// Admin toggles which fields on the new-request form are mandatory.
+function RequestFieldsTab({ config }: { config: FieldConfig[] }) {
+  const router = useRouter();
+  const initial: Record<string, boolean> = {};
+  for (const c of config) initial[c.field_key] = c.required;
+  const [state, setState] = useState<Record<string, boolean>>(initial);
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const toggle = async (key: string, next: boolean) => {
+    setSavingKey(key);
+    setError(null);
+    setState((s) => ({ ...s, [key]: next }));
+    const res = await saveRequestFieldConfig(key, next);
+    setSavingKey(null);
+    if (res.error) {
+      setState((s) => ({ ...s, [key]: !next })); // revert on failure
+      setError(res.error);
+      return;
+    }
+    router.refresh();
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">
+        Choose which fields are required when creating a transport request
+        (client portal and in-house). Client, pickup, and delivery locations are
+        always required.
+      </p>
+      {error ? (
+        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
+      <Table>
+        <THead>
+          <TR>
+            <TH>Field</TH>
+            <TH>Required</TH>
+          </TR>
+        </THead>
+        <TBody>
+          {REQUEST_FIELD_DEFS.map((def) => {
+            const on = state[def.key] === true;
+            return (
+              <TR key={def.key}>
+                <TD className="font-medium">{def.label}</TD>
+                <TD>
+                  <label className="inline-flex cursor-pointer items-center gap-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-input accent-brand-blue"
+                      checked={on}
+                      disabled={savingKey === def.key}
+                      onChange={(e) => toggle(def.key, e.target.checked)}
+                    />
+                    <Badge variant={on ? "success" : "default"}>
+                      {on ? "Mandatory" : "Optional"}
+                    </Badge>
+                  </label>
+                </TD>
+              </TR>
+            );
+          })}
+        </TBody>
+      </Table>
     </div>
   );
 }

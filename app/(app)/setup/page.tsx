@@ -9,7 +9,7 @@ export default async function SetupPage() {
   await requireRole(["admin"]);
   const supabase = await createClient();
 
-  const [cities, routes, serviceTypes, standardRates] =
+  const [cities, routes, serviceTypes, standardRates, fieldConfig] =
     await Promise.all([
     supabase.from("cities").select("*").is("deleted_at", null).order("name"),
     supabase
@@ -27,19 +27,21 @@ export default async function SetupPage() {
       .select("*")
       .is("deleted_at", null)
       .order("created_at"),
+    supabase.from("request_field_config").select("field_key, required"),
   ]);
 
   return (
     <div>
       <PageHeader
         title="Setup"
-        description="Cities, routes, service types, and standard rates used across the system."
+        description="Cities, routes, service types, standard rates, and request form rules used across the system."
       />
       <SetupTabs
         cities={cities.data ?? []}
         routes={routes.data ?? []}
         serviceTypes={serviceTypes.data ?? []}
         standardRates={standardRates.data ?? []}
+        fieldConfig={fieldConfig.data ?? []}
       />
     </div>
   );

@@ -241,15 +241,25 @@ export function WaybillView({
                 Pickup address
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm">
-                {waybill.pickup_address || "—"}
+                {waybill.pickup_city || waybill.pickup_address || "—"}
               </p>
+              {waybill.pickup_maps_url ? (
+                <a
+                  href={waybill.pickup_maps_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-block text-sm text-brand-blue hover:underline"
+                >
+                  Open location in Google Maps
+                </a>
+              ) : null}
             </div>
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Delivery address
               </p>
               <p className="mt-1 whitespace-pre-wrap text-sm">
-                {waybill.delivery_address || "—"}
+                {waybill.delivery_city || waybill.delivery_address || "—"}
               </p>
               {waybill.delivery_maps_url ? (
                 <a
@@ -306,6 +316,10 @@ export function WaybillView({
             <Field label="Truck number" value={waybill.truck_number} />
             <Field label="Service type" value={waybill.service_type_name} />
             <Field label="Driver" value={waybill.driver_name} />
+            <Field
+              label="Driver ID (License No.)"
+              value={waybill.driver_license}
+            />
             {canSeeInternal ? (
               <Field label="Supplier" value={waybill.supplier_name} />
             ) : null}

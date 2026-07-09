@@ -120,7 +120,9 @@ user** with "Auto Confirm", then in **SQL Editor** run
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role / secret key |
    | `NEXT_PUBLIC_APP_NAME` | `3PL TMS` |
    | `NEXT_PUBLIC_SITE_URL` | `https://<your-app>.vercel.app` |
-   | `RESEND_API_KEY` | (optional — only if emailing waybills) |
+   | `GMAIL_USER` | (optional email — your Gmail address) |
+   | `GMAIL_APP_PASSWORD` | (optional email — 16-char Gmail App Password) |
+   | `RESEND_API_KEY` | (optional — alternative to Gmail/SMTP) |
    | `RESEND_FROM_EMAIL` | (optional — e.g. `3PL TMS <noreply@yourdomain.com>`) |
 
 3. Click **Deploy**. When it finishes you'll get a `https://<your-app>.vercel.app`
@@ -146,9 +148,13 @@ Supabase's built-in email is rate-limited and meant for testing. For real
 sending — both **auth emails** (email change/reset) and **waybill emails** — set
 up a real sender:
 
-- **Waybill emails (Resend):** create a key at resend.com, **verify your domain**,
-  and set `RESEND_API_KEY` + `RESEND_FROM_EMAIL` (an address on that domain) in
-  Vercel. You cannot send *as* `@gmail.com`.
+- **Waybill emails — easiest is a personal Gmail:** set `GMAIL_USER` +
+  `GMAIL_APP_PASSWORD` (a 16-char App Password from
+  https://myaccount.google.com/apppasswords; needs 2-Step Verification) in Vercel.
+  This sends real mail *as* your Gmail address, no domain needed. Alternatives:
+  any SMTP server (`SMTP_HOST`/`SMTP_PORT`/`SMTP_SECURE`/`SMTP_USER`/`SMTP_PASS`/
+  `SMTP_FROM`), or Resend (`RESEND_API_KEY` + `RESEND_FROM_EMAIL`, verify your
+  domain — Resend can't send *as* `@gmail.com`).
 - **Auth emails:** Supabase Dashboard → **Project Settings → Authentication →
   SMTP** → enable custom SMTP (Resend, Postmark, SES, etc.) so confirmation and
   reset emails actually deliver in production.

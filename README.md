@@ -118,8 +118,8 @@ shipment's place in the flow.
 
 ### Waybills & PDFs (Phase 6)
 
-> **Phase 6 added two dependencies** (`@react-pdf/renderer`, `resend`). Run
-> `pnpm install` once before `pnpm dev`.
+> **Waybill email needs these dependencies** (`@react-pdf/renderer`, `resend`,
+> `nodemailer`). Run `pnpm install` once before `pnpm dev`.
 
 A waybill is created automatically the moment a dispatch is marked **Dispatched**
 (`WB-YYYYMMDD-<RequestNo>`), with all its details snapshotted so the document
@@ -129,9 +129,12 @@ On the waybill page you can **Approve** it (Admin/Dispatch) — which renders th
 PDF (four sections: E-Way details, address, goods, transportation) and stores it
 in the private `waybills` bucket — then **Download**, **Print**, or **Email** it.
 
-Email uses Resend and is optional: without `RESEND_API_KEY` the Email button
-tells you it's not configured; everything else works. See `.env.local.example`
-for how to enable it (including a no-domain option for local testing).
+Email is optional and works with a **personal mailbox** — the easiest is Gmail:
+set `GMAIL_USER` + `GMAIL_APP_PASSWORD` (a 16-char App Password from
+https://myaccount.google.com/apppasswords) in `.env.local` and restart. Any other
+SMTP server (`SMTP_HOST`/`SMTP_PORT`/`SMTP_USER`/`SMTP_PASS`) or a Resend API key
+also work. Without any of them the Email button tells you how to set it up;
+approve/download/print always work. See `.env.local.example` for all options.
 
 ### Tracking, POD & exceptions (Phase 7)
 

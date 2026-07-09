@@ -19,7 +19,7 @@ export default async function DashboardPage({
 }) {
   const { profile } = await requireUser();
   if (!profile) redirect("/login");
-  if (profile.role === "driver") redirect("/my-dispatches");
+  if (profile.role === "driver") redirect("/current-delivery");
 
   // Clients get their own dashboard scoped to their data (RLS enforces it).
   if (profile.role === "client") {

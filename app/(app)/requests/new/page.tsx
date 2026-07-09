@@ -3,6 +3,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireRole } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/app/page-header";
+import { toRequiredMap } from "@/lib/request-fields";
 import { RequestForm } from "../request-form";
 
 export const metadata = { title: "New request" };
@@ -22,6 +23,7 @@ export default async function NewRequestPage() {
     routes,
     contractRates,
     standardRates,
+    fieldConfig,
   ] = await Promise.all([
       supabase
         .from("clients")
@@ -65,6 +67,7 @@ export default async function NewRequestPage() {
         .select("service_type_id, route_id, rate, currency")
         .eq("is_active", true)
         .is("deleted_at", null),
+      supabase.from("request_field_config").select("field_key, required"),
     ]);
 
   const clientMultiCharge: Record<string, number> = {};
@@ -96,6 +99,7 @@ export default async function NewRequestPage() {
         clientMultiCharge={clientMultiCharge}
         canSetPricing={!isClient}
         isClient={isClient}
+        requiredFields={toRequiredMap(fieldConfig.data)}
         lockClientId={lockClientId}
       />
     </div>

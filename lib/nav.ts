@@ -6,6 +6,7 @@ import {
   Boxes,
   Building2,
   PackageCheck,
+  Navigation,
   ScrollText,
   BarChart3,
   UsersRound,
@@ -88,6 +89,12 @@ export const NAV_ITEMS: NavItem[] = [
     href: "/users",
     icon: UsersRound,
     roles: ["admin"],
+  },
+  {
+    label: "Current Delivery",
+    href: "/current-delivery",
+    icon: Navigation,
+    roles: ["driver"],
   },
   {
     label: "My Deliveries",

@@ -26,6 +26,7 @@ export type WaybillStop = {
 const NAVY = "#0f2a4a";
 const BORDER = "#c9d2dd";
 const MUTED = "#5b6878";
+const LINK = "#2b8fd6";
 
 const styles = StyleSheet.create({
   page: {
@@ -70,6 +71,7 @@ const styles = StyleSheet.create({
   fieldLabel: { fontSize: 7, color: MUTED, textTransform: "uppercase" },
   fieldValue: { fontSize: 10, marginTop: 1 },
   addressBox: { flex: 1, paddingRight: 12 },
+  mapsLink: { fontSize: 9, color: LINK, marginTop: 3 },
   tableHead: {
     flexDirection: "row",
     backgroundColor: "#eef2f7",
@@ -108,11 +110,190 @@ function Field({ label, value }: { label: string; value?: string | null }) {
   );
 }
 
+// One address box: label + city (per the requested "Pick Up/Delivery Address =
+// City" format) + a clickable Google Maps link when a URL is available.
+function AddressBox({
+  label,
+  city,
+  mapsUrl,
+}: {
+  label: string;
+  city: string | null;
+  mapsUrl: string | null;
+}) {
+  return (
+    <View style={styles.addressBox}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <Text style={styles.fieldValue}>{city && city !== "" ? city : "—"}</Text>
+      {mapsUrl ? (
+        <Link src={mapsUrl} style={styles.mapsLink}>
+          Open location in Google Maps
+        </Link>
+      ) : null}
+    </View>
+  );
+}
+
+// A complete waybill page. Rendered once for the primary delivery and once per
+// additional delivery location, so every location produces a full document.
+function WaybillPageBody({
+  waybill,
+  items,
+  appName,
+  delivery,
+  pageLabel,
+}: {
+  waybill: Waybill;
+  items: Item[];
+  appName: string;
+  delivery: {
+    receiver: string | null;
+    city: string | null;
+    mapsUrl: string | null;
+  };
+  pageLabel?: string;
+}): React.ReactElement {
+  return (
+    <Page size="A4" style={styles.page}>
+      <View style={styles.header}>
+        <View>
+          <Text style={styles.brand}>{appName}</Text>
+          <Text style={styles.brandSub}>
+            Transport Waybill{pageLabel ? ` · ${pageLabel}` : ""}
+          </Text>
+        </View>
+        <View>
+          <Text style={styles.docTitle}>{waybill.waybill_no}</Text>
+          <Text style={styles.docMeta}>
+            Issued {formatDate(waybill.issued_at)}
+          </Text>
+          <Text style={styles.docMeta}>
+            Status: {waybill.status === "approved" ? "Approved" : "Draft"}
+            {waybill.revision > 0 ? ` · Rev ${waybill.revision}` : ""}
+          </Text>
+        </View>
+      </View>
+
+      {/* 1) E-Way / document details */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>E-Way Details</Text>
+        <View style={styles.sectionBody}>
+          <View style={styles.row}>
+            <Field label="Waybill No." value={waybill.waybill_no} />
+            <Field label="Issued" value={formatDate(waybill.issued_at)} />
+            <Field label="Shipment Type" value={waybill.shipment_type_name} />
+            <Field label="Pickup Date" value={formatDate(waybill.pickup_date)} />
+          </View>
+        </View>
+      </View>
+
+      {/* 2) Address — Sender/Receiver + Pickup/Delivery city + maps for both */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Address</Text>
+        <View style={styles.sectionBody}>
+          <View style={styles.row}>
+            <Field label="Sender" value={waybill.client_name} />
+            <Field label="Receiver" value={delivery.receiver} />
+            <Field label="PO / Reference" value={waybill.po_reference} />
+          </View>
+          <View style={styles.row}>
+            <AddressBox
+              label="Pickup Address"
+              city={waybill.pickup_city}
+              mapsUrl={waybill.pickup_maps_url}
+            />
+            <AddressBox
+              label="Delivery Address"
+              city={delivery.city}
+              mapsUrl={delivery.mapsUrl}
+            />
+          </View>
+        </View>
+      </View>
+
+      {/* 3) Goods */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Goods</Text>
+        <View>
+          <View style={styles.tableHead}>
+            <Text style={[styles.th, { flex: 3 }]}>Item</Text>
+            <Text style={[styles.th, { flex: 4 }]}>Description</Text>
+            <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>Qty</Text>
+          </View>
+          {items.length === 0 ? (
+            <View style={styles.tableRow}>
+              <Text style={{ flex: 1, color: MUTED }}>
+                No itemized goods. Total quantity: {waybill.quantity ?? "—"}
+              </Text>
+            </View>
+          ) : (
+            items.map((it) => (
+              <View key={it.id} style={styles.tableRow}>
+                <Text style={{ flex: 3 }}>{it.item_name}</Text>
+                <Text style={{ flex: 4 }}>{it.description || "—"}</Text>
+                <Text style={{ flex: 1, textAlign: "right" }}>
+                  {it.quantity ?? "—"}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
+      </View>
+
+      {/* 4) Transportation — incl. Driver ID (license number) */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Transportation</Text>
+        <View style={styles.sectionBody}>
+          <View style={styles.row}>
+            <Field label="Truck Number" value={waybill.truck_number} />
+            <Field label="Service Type" value={waybill.service_type_name} />
+          </View>
+          <View style={styles.row}>
+            <Field label="Driver" value={waybill.driver_name} />
+            <Field label="Driver ID (License No.)" value={waybill.driver_license} />
+          </View>
+        </View>
+      </View>
+
+      {/* 5) Charges */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Charges</Text>
+        <View style={styles.sectionBody}>
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Text style={{ fontFamily: "Helvetica-Bold", color: NAVY }}>
+              Total Amount
+            </Text>
+            <Text
+              style={{ fontSize: 13, fontFamily: "Helvetica-Bold", color: NAVY }}
+            >
+              {waybill.freight_amount != null
+                ? formatMoney(waybill.freight_amount, waybill.currency ?? "SAR")
+                : "—"}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.footer} fixed>
+        <Text>{appName}</Text>
+        <Text>
+          {waybill.waybill_no} · Generated {formatDate(new Date().toISOString())}
+        </Text>
+      </View>
+    </Page>
+  );
+}
+
 export function waybillDocument({
   waybill,
   items,
   appName,
-  pickups = [],
   deliveries = [],
 }: {
   waybill: Waybill;
@@ -121,227 +302,38 @@ export function waybillDocument({
   pickups?: WaybillStop[];
   deliveries?: WaybillStop[];
 }): React.ReactElement {
-  // Extra delivery stops (beyond the primary one shown on page 1) each get their
-  // own page so a multi-drop trip produces a multi-page waybill.
+  // Primary delivery comes from the waybill snapshot; any additional delivery
+  // locations each get their own COMPLETE waybill page.
+  const primary = {
+    receiver: waybill.receiver_name,
+    city: waybill.delivery_city,
+    mapsUrl: waybill.delivery_maps_url,
+  };
   const extraStops = deliveries.length > 1 ? deliveries.slice(1) : [];
+  const totalPages = 1 + extraStops.length;
+
   return (
     <Document title={waybill.waybill_no}>
-      <Page size="A4" style={styles.page}>
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.brand}>{appName}</Text>
-            <Text style={styles.brandSub}>Transport Waybill</Text>
-          </View>
-          <View>
-            <Text style={styles.docTitle}>{waybill.waybill_no}</Text>
-            <Text style={styles.docMeta}>
-              Issued {formatDate(waybill.issued_at)}
-            </Text>
-            <Text style={styles.docMeta}>
-              Status: {waybill.status === "approved" ? "Approved" : "Draft"}
-              {waybill.revision > 0 ? ` · Rev ${waybill.revision}` : ""}
-            </Text>
-          </View>
-        </View>
-
-        {/* 1) E-Way / document details */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>E-Way Details</Text>
-          <View style={styles.sectionBody}>
-            <View style={styles.row}>
-              <Field label="Waybill No." value={waybill.waybill_no} />
-              <Field label="Issued" value={formatDate(waybill.issued_at)} />
-              <Field
-                label="Shipment Type"
-                value={waybill.shipment_type_name}
-              />
-              <Field label="Pickup Date" value={formatDate(waybill.pickup_date)} />
-            </View>
-          </View>
-        </View>
-
-        {/* 2) Address */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Address</Text>
-          <View style={styles.sectionBody}>
-            <View style={styles.row}>
-              <Field label="Sender" value={waybill.client_name} />
-              <Field label="Receiver" value={waybill.receiver_name} />
-              <Field label="PO / Reference" value={waybill.po_reference} />
-            </View>
-            <View style={styles.row}>
-              <View style={styles.addressBox}>
-                <Text style={styles.fieldLabel}>Pickup Address</Text>
-                <Text style={styles.fieldValue}>
-                  {waybill.pickup_address || "—"}
-                </Text>
-              </View>
-              <View style={styles.addressBox}>
-                <Text style={styles.fieldLabel}>Delivery Address</Text>
-                <Text style={styles.fieldValue}>
-                  {waybill.delivery_address || "—"}
-                </Text>
-                {waybill.delivery_maps_url ? (
-                  <Link
-                    src={waybill.delivery_maps_url}
-                    style={{ fontSize: 9, color: "#2b8fd6", marginTop: 2 }}
-                  >
-                    Open location in Google Maps
-                  </Link>
-                ) : null}
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* 2b) Additional pickups (multi-pickup trips) */}
-        {pickups.length > 1 ? (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Pickup Locations</Text>
-            <View style={styles.sectionBody}>
-              {pickups.map((p, i) => (
-                <View key={i} style={styles.row}>
-                  <Field label={`Pickup ${i + 1}`} value={p.name} />
-                  <Field label="City" value={p.city} />
-                  <Field label="Address" value={p.address} />
-                  <Field label="Contact" value={p.contact} />
-                </View>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
-        {/* 3) Goods */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Goods</Text>
-          <View>
-            <View style={styles.tableHead}>
-              <Text style={[styles.th, { flex: 3 }]}>Item</Text>
-              <Text style={[styles.th, { flex: 4 }]}>Description</Text>
-              <Text style={[styles.th, { flex: 1, textAlign: "right" }]}>
-                Qty
-              </Text>
-              <Text style={[styles.th, { flex: 2, textAlign: "right" }]}>
-                Unit Price
-              </Text>
-            </View>
-            {items.length === 0 ? (
-              <View style={styles.tableRow}>
-                <Text style={{ flex: 1, color: MUTED }}>
-                  No itemized goods. Total quantity: {waybill.quantity ?? "—"}
-                </Text>
-              </View>
-            ) : (
-              items.map((it) => (
-                <View key={it.id} style={styles.tableRow}>
-                  <Text style={{ flex: 3 }}>{it.item_name}</Text>
-                  <Text style={{ flex: 4 }}>{it.description || "—"}</Text>
-                  <Text style={{ flex: 1, textAlign: "right" }}>
-                    {it.quantity ?? "—"}
-                  </Text>
-                  <Text style={{ flex: 2, textAlign: "right" }}>
-                    {it.unit_price != null ? formatMoney(it.unit_price) : "—"}
-                  </Text>
-                </View>
-              ))
-            )}
-          </View>
-        </View>
-
-        {/* 4) Transportation */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Transportation</Text>
-          <View style={styles.sectionBody}>
-            <View style={styles.row}>
-              <Field label="Truck Number" value={waybill.truck_number} />
-              <Field label="Service Type" value={waybill.service_type_name} />
-              <Field label="Driver" value={waybill.driver_name} />
-            </View>
-          </View>
-        </View>
-
-        {/* 5) Charges */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Charges</Text>
-          <View style={styles.sectionBody}>
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                alignItems: "center",
-              }}
-            >
-              <Text style={{ fontFamily: "Helvetica-Bold", color: NAVY }}>
-                Total Amount
-              </Text>
-              <Text style={{ fontSize: 13, fontFamily: "Helvetica-Bold", color: NAVY }}>
-                {waybill.freight_amount != null
-                  ? formatMoney(waybill.freight_amount, waybill.currency ?? "SAR")
-                  : "—"}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        <View style={styles.footer} fixed>
-          <Text>{appName}</Text>
-          <Text>
-            {waybill.waybill_no} · Generated {formatDate(new Date().toISOString())}
-          </Text>
-        </View>
-      </Page>
-
-      {/* One extra page per additional delivery stop. */}
+      <WaybillPageBody
+        waybill={waybill}
+        items={items}
+        appName={appName}
+        delivery={primary}
+        pageLabel={totalPages > 1 ? `Location 1 of ${totalPages}` : undefined}
+      />
       {extraStops.map((stop, i) => (
-        <Page key={i} size="A4" style={styles.page}>
-          <View style={styles.header}>
-            <View>
-              <Text style={styles.brand}>{appName}</Text>
-              <Text style={styles.brandSub}>
-                Transport Waybill · Delivery Stop {i + 2} of {deliveries.length}
-              </Text>
-            </View>
-            <View>
-              <Text style={styles.docTitle}>{waybill.waybill_no}</Text>
-              <Text style={styles.docMeta}>{waybill.client_name ?? ""}</Text>
-            </View>
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>
-              Delivery Stop {i + 2}
-            </Text>
-            <View style={styles.sectionBody}>
-              <View style={styles.row}>
-                <Field label="Receiver" value={stop.name} />
-                <Field label="City" value={stop.city} />
-                <Field label="Contact" value={stop.contact} />
-              </View>
-              <View style={styles.row}>
-                <View style={styles.addressBox}>
-                  <Text style={styles.fieldLabel}>Delivery Address</Text>
-                  <Text style={styles.fieldValue}>{stop.address || "—"}</Text>
-                  {stop.mapsUrl ? (
-                    <Link
-                      src={stop.mapsUrl}
-                      style={{ fontSize: 9, color: "#2b8fd6", marginTop: 2 }}
-                    >
-                      Open location in Google Maps
-                    </Link>
-                  ) : null}
-                </View>
-              </View>
-            </View>
-          </View>
-
-          <View style={styles.footer} fixed>
-            <Text>{appName}</Text>
-            <Text>
-              {waybill.waybill_no} · Generated{" "}
-              {formatDate(new Date().toISOString())}
-            </Text>
-          </View>
-        </Page>
+        <WaybillPageBody
+          key={i}
+          waybill={waybill}
+          items={items}
+          appName={appName}
+          delivery={{
+            receiver: stop.name,
+            city: stop.city,
+            mapsUrl: stop.mapsUrl,
+          }}
+          pageLabel={`Location ${i + 2} of ${totalPages}`}
+        />
       ))}
     </Document>
   );

@@ -519,6 +519,12 @@ export type Database = {
         };
         Relationships: [];
       };
+      request_field_config: {
+        Row: { field_key: string; required: boolean; updated_at: string; updated_by: string | null; };
+        Insert: { field_key: string; required?: boolean; updated_at?: string; updated_by?: string | null; };
+        Update: { field_key?: string; required?: boolean; updated_at?: string; updated_by?: string | null; };
+        Relationships: [];
+      };
       request_items: {
         Row: {
           id: string;
@@ -959,6 +965,7 @@ export type Database = {
           pickup_date: string | null;
           supplier_name: string | null;
           driver_name: string | null;
+          driver_license: string | null;
           revision: number;
           amended_at: string | null;
           amended_by: string | null;
@@ -995,6 +1002,7 @@ export type Database = {
           pickup_date?: string | null;
           supplier_name?: string | null;
           driver_name?: string | null;
+          driver_license?: string | null;
           revision?: number;
           amended_at?: string | null;
           amended_by?: string | null;
@@ -1031,6 +1039,7 @@ export type Database = {
           pickup_date?: string | null;
           supplier_name?: string | null;
           driver_name?: string | null;
+          driver_license?: string | null;
           revision?: number;
           amended_at?: string | null;
           amended_by?: string | null;
